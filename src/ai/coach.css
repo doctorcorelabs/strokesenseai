@@ -1,0 +1,186 @@
+/* ToolCoach styles. Same tokens as src/styles.css. */
+
+.coach {
+  padding: 1.25rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.coach-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.coach-heading h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.coach-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--mint);
+  color: var(--green);
+  flex: none;
+}
+
+.coach-eyebrow {
+  font-family: var(--display);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin: 0 0 0.15rem;
+}
+
+.coach-heading .badge {
+  margin-left: auto;
+  flex: none;
+}
+
+.coach-reply {
+  background: var(--mint);
+  border: 1px solid var(--mint-strong);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.1rem;
+  font-size: 0.98rem;
+}
+
+.coach-reply p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.coach-reply .reply-id {
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.coach-reply .btn {
+  margin-top: 0.8rem;
+}
+
+.coach form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.coach-label {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--deep);
+}
+
+.coach-input-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.coach-input-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.coach-input-row .btn {
+  flex: none;
+}
+
+.coach-spinner {
+  animation: coach-spin 0.9s linear infinite;
+}
+
+@keyframes coach-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.coach-error {
+  border: 1.5px solid var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.coach-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.85rem;
+  font-size: 0.85rem;
+}
+
+.coach-sources > span {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.coach-sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--green);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.coach-sources a:hover {
+  text-decoration: underline;
+}
+
+.coach-footer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.coach-footer svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+@media (max-width: 860px) {
+  .coach-input-row {
+    flex-direction: column;
+  }
+
+  .coach-input-row .btn {
+    width: 100%;
+  }
+
+  .coach-heading {
+    flex-wrap: wrap;
+  }
+
+  .coach-heading .badge {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-spinner {
+    animation: none;
+  }
+}
