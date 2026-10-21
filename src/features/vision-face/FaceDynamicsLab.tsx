@@ -109,6 +109,7 @@ function MeasureCapture({
             setPhotoUrl(url);
             setPlaced({});
           }}
+          exits={[{ label: 'Upload a photo instead', onSelect: () => setSource('upload') }]}
         />
       )}
       {error && (

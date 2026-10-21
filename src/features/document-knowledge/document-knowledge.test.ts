@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EVIDENCE_CARDS, GUIDELINE_TOPICS, cardsForTopic, getCard } from './guideline-cards';
 import {
   DECISION_TREE,
+  EXAMPLE_QUESTIONS,
   TREE_ROOT_ID,
   answerFromCards,
   cardsForNode,
@@ -65,6 +66,15 @@ describe('guideline retrieval', () => {
     expect(answer.refused).toBe(true);
     expect(answer.cards).toHaveLength(0);
     expect(answer.refusalText).toContain('does not cover');
+  });
+
+  it('every clickable example question is covered by the library, never refused', () => {
+    expect(EXAMPLE_QUESTIONS.length).toBeGreaterThanOrEqual(3);
+    for (const example of EXAMPLE_QUESTIONS) {
+      const answer = answerFromCards(example);
+      expect(answer.refused, `example refused: ${example}`).toBe(false);
+      expect(answer.cards.length).toBeGreaterThan(0);
+    }
   });
 
   it('is deterministic: the same question returns the same cards', () => {

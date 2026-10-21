@@ -9,6 +9,7 @@ import {
   ModeBadge,
   UncertaintyNote,
 } from '../../components/ui';
+import HowItWorks from '../../components/HowItWorks';
 import CameraStage from './CameraStage';
 import SpeechWorkbench from './SpeechWorkbench';
 import {
@@ -587,6 +588,8 @@ export default function DigitalFastSession() {
           />
         </>
       )}
+
+      <HowItWorks feature={feature} />
     </div>
   );
 }

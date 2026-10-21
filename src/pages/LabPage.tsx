@@ -3,13 +3,9 @@ import { getFeature } from '../../shared/registry';
 import type { FeatureEntry } from '../../shared/registry';
 import { LAB_MODULES } from '../../shared/lab';
 import ToolCoach from '../ai/ToolCoach';
-import {
-  CannotAnalyzePanel,
-  EmergencyBanner,
-  MaturityBadge,
-  ModeBadge,
-  UncertaintyNote,
-} from '../components/ui';
+import { featureModeLabel } from '../ai/featureMode';
+import HowItWorks from '../components/HowItWorks';
+import { EmergencyBanner, MaturityBadge, UncertaintyNote } from '../components/ui';
 import {
   FULL_PAGE_LABS,
   SELF_BANNERED_IDS,
@@ -48,33 +44,6 @@ function resolveCoachProps(feature: FeatureEntry): CoachResolution {
 function inputSummary(feature: FeatureEntry): string {
   if (feature.inputKinds.length === 0) return 'the input described in this lab';
   return feature.inputKinds.join(', ');
-}
-
-/**
- * The cannot-analyze explainer from the Phase 0 page. It stays in this shell
- * for every lab rendered here (guided walkthroughs and feature workspaces
- * alike, below the workspace) so the page always shows what a refused
- * analysis looks like. Full page labs render their own standalone pages and
- * do not get this section from the shell.
- */
-function CannotAnalyzeSection() {
-  return (
-    <section className="panel" aria-labelledby="lab-cannot">
-      <h2 className="section-title" id="lab-cannot">
-        When analysis is not possible
-      </h2>
-      <CannotAnalyzePanel
-        role="note"
-        reason="No input yet. This panel shows what a failed analysis looks like: the lab reports the problem instead of inventing a result."
-        guidance="When you use this lab with a real input, the lab checks the input first. If the input is missing, unclear, or below the quality needed, you will see this panel with the specific reason instead of a result."
-      />
-      <UncertaintyNote>
-        Every measurement in this lab is experimental. Values are shown with their input quality
-        and known limits, never as a clinical score, and a measurement that looks typical cannot
-        rule out stroke.
-      </UncertaintyNote>
-    </section>
-  );
 }
 
 export default function LabPage({ id }: { id: string }) {
@@ -131,87 +100,94 @@ export default function LabPage({ id }: { id: string }) {
         <p className="muted">{feature.tagline}</p>
         <div className="badge-row">
           <MaturityBadge maturity={feature.maturity} />
-          <ModeBadge mode={apiConfigured ? 'live' : 'offline'} />
+          {/* The mode label comes from the per-feature helper so the header
+              never claims a mode the feature itself does not have. */}
+          <span className="badge badge-mode">{featureModeLabel(feature, apiConfigured)}</span>
         </div>
       </header>
 
       {/* Workspaces in SELF_BANNERED_IDS render their own emergency banner,
-          so the shell banner is skipped for them to avoid showing it twice. */}
-      {!SELF_BANNERED_IDS.has(id) && <EmergencyBanner />}
+          so the shell banner is skipped for them to avoid showing it twice.
+          Lab pages use the slim banner variant so the workspace stays the
+          first substantial element on the page. */}
+      {!SELF_BANNERED_IDS.has(id) && <EmergencyBanner variant="slim" />}
 
-      <section className="panel" aria-labelledby="lab-summary">
-        <h2 className="section-title" id="lab-summary">
-          About this experiment
-        </h2>
-        <p>{feature.summary}</p>
-      </section>
-
-      {!exact && (
-        <p className="muted" role="note">
-          Note: this lab does not have its own AI coach module yet, so the coach below uses a
-          general introductory module. Its explanations are generic background and may not cover
-          what makes this lab specific.
-        </p>
-      )}
-      <ToolCoach
-        tool={tool}
-        moduleId={moduleId}
-        context={`${feature.name} (${feature.group}). ${feature.summary}`}
-        fallback={fallback}
-      />
-
+      {/* The interactive workspace is the primary element of the page and
+          renders directly under the header. Everything explanatory moved
+          into the collapsed About and help section below it. A failed
+          analysis is reported by the workspace itself with its real reason;
+          the shell no longer shows a permanent demonstration of that panel. */}
       {hasWorkspace ? (
-        <>
-          <Suspense fallback={<WorkspaceLoading />}>
-            {isSpeechAphasia ? (
-              <SpeechAphasiaLab id={id} />
-            ) : WorkspaceLab ? (
-              <WorkspaceLab />
-            ) : null}
-          </Suspense>
-          <CannotAnalyzeSection />
-        </>
+        <Suspense fallback={<WorkspaceLoading />}>
+          {isSpeechAphasia ? (
+            <SpeechAphasiaLab id={id} />
+          ) : WorkspaceLab ? (
+            <WorkspaceLab />
+          ) : null}
+        </Suspense>
       ) : (
-        <>
-          <section className="panel" aria-labelledby="lab-how">
-            <h2 className="section-title" id="lab-how">
-              How this experiment works
-            </h2>
-            <ol className="step-list">
-              <li>
-                <strong>You provide input.</strong> This lab works with {inputSummary(feature)}.
-                Sample inputs are synthetic by default. Providing real input is always opt-in, one
-                session at a time.
-              </li>
-              <li>
-                <strong>Processing stays local first.</strong> Measurements are computed in your
-                browser whenever the experiment allows it. Raw photos, audio, and video are not
-                uploaded by default.
-              </li>
-              <li>
-                <strong>AI explanation is optional.</strong> If you ask for one and consent to data
-                sharing, only the derived measurements and your question are sent through the
-                Cloudflare Worker to the AI provider. The AI explains the measurement; it never sets
-                the measurement, a score, or a conclusion.
-              </li>
-            </ol>
-            <p className="muted">
-              Guided walkthrough: this page explains the experiment step by step while its
-              interactive workspace is still being built, so there is nothing to run yet. The coach
-              above can already answer questions about the idea behind the lab.
-            </p>
-          </section>
-
-          <CannotAnalyzeSection />
-        </>
+        <section className="panel" aria-labelledby="lab-how">
+          <h2 className="section-title" id="lab-how">
+            How this experiment works
+          </h2>
+          <ol className="step-list">
+            <li>
+              <strong>You provide input.</strong> This lab works with {inputSummary(feature)}.
+              Sample inputs are synthetic by default. Providing real input is always opt-in, one
+              session at a time.
+            </li>
+            <li>
+              <strong>Processing stays local first.</strong> Measurements are computed in your
+              browser whenever the experiment allows it. Raw photos, audio, and video are not
+              uploaded by default.
+            </li>
+            <li>
+              <strong>AI explanation is optional.</strong> If you ask for one and consent to data
+              sharing, only the derived measurements and your question are sent through the
+              Cloudflare Worker to the AI provider. The AI explains the measurement; it never sets
+              the measurement, a score, or a conclusion.
+            </li>
+          </ol>
+          <p className="muted">
+            Guided walkthrough: this page explains the experiment step by step while its
+            interactive workspace is still being built, so there is nothing to run yet. The coach
+            in the About and help section below can already answer questions about the idea
+            behind the lab.
+          </p>
+        </section>
       )}
 
-      <section className="panel" aria-labelledby="lab-limits">
-        <h2 className="section-title" id="lab-limits">
-          Known limitations
-        </h2>
+      <details className="panel">
+        <summary className="section-title">About and help</summary>
+
+        <h3>About this experiment</h3>
+        <p>{feature.summary}</p>
+
+        <HowItWorks feature={feature} />
+
+        {!exact && (
+          <p className="muted" role="note">
+            Note: this lab does not have its own AI coach module yet, so the coach below uses a
+            general introductory module. Its explanations are generic background and may not cover
+            what makes this lab specific.
+          </p>
+        )}
+        <ToolCoach
+          tool={tool}
+          moduleId={moduleId}
+          context={`${feature.name} (${feature.group}). ${feature.summary}`}
+          fallback={fallback}
+        />
+
+        <h3>Known limitations</h3>
         <p>{feature.limitations}</p>
-      </section>
+
+        <UncertaintyNote>
+          Every measurement in this lab is experimental. Values are shown with their input quality
+          and known limits, never as a clinical score, and a measurement that looks typical cannot
+          rule out stroke.
+        </UncertaintyNote>
+      </details>
     </div>
   );
 }

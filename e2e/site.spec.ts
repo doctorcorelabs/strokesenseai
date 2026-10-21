@@ -3,10 +3,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { FEATURES } from '../shared/registry';
 
 // These tests pin the stable contracts of the product (feature names from
-// the registry, the intended-use sentence on the Scope page, the
-// cannot-analyze panel, the FAST escalation to 119, WCAG A/AA cleanliness
-// on every route, and the offline privacy guarantee that no request leaves
-// the app origin), not exact marketing copy.
+// the registry, the intended-use sentence on the Scope page, failure
+// panels that appear only on a real failure, the FAST escalation to 119,
+// WCAG A/AA cleanliness on every route, and the offline privacy guarantee
+// that no request leaves the app origin), not exact marketing copy.
 
 async function gotoHash(page: Page, hash: string) {
   await page.goto(`/${hash}`);
@@ -32,11 +32,18 @@ test('about page shows the intended use statement', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('arm drift lab shows an explicit cannot-analyze panel', async ({
+// P0 design decision (2026-10-21, UX audit follow-up): the permanent
+// cannot-analyze demo panel was removed from the lab shell on purpose.
+// Failure panels now appear only on a real failure, so a freshly opened
+// lab shows its workspace and no failure text.
+test('arm drift lab opens on its workspace with no permanent failure panel', async ({
   page,
 }) => {
   await gotoHash(page, '#lab/arm-drift');
-  await expect(page.getByText(/cannot analyze/i).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /start/i }).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/cannot analyze/i)).toHaveCount(0);
 });
 
 test('FAST check escalates to calling 119 after a yes answer', async ({
@@ -125,7 +132,13 @@ test('offline mode makes no request to any external origin', async ({
   await expect(page.getByText(/Face Symmetry Analyzer/i).first()).toBeVisible();
 
   await gotoHash(page, '#lab/arm-drift');
-  await expect(page.getByText(/cannot analyze/i).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /start/i }).first(),
+  ).toBeVisible();
+
+  // The coach now lives inside the collapsed "About and help" section at
+  // the foot of the lab page (P0 reorder); open it before interacting.
+  await page.locator('summary', { hasText: 'About and help' }).click();
 
   // Offline coach interaction: asking a question must be answered from the
   // local prewritten guide without any network call.

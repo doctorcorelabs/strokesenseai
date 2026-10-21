@@ -1,4 +1,5 @@
 import { FEATURES, FEATURE_GROUPS } from '../../shared/registry';
+import { featureModeLabel } from '../ai/featureMode';
 import { MaturityBadge } from '../components/ui';
 
 function groupLabel(group: unknown): string {
@@ -20,6 +21,7 @@ const NOT_IMPLEMENTED = [
 ];
 
 export default function ScopePage() {
+  const apiConfigured = Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
   return (
     <div className="page-stack">
       <header className="page-heading">
@@ -50,6 +52,16 @@ export default function ScopePage() {
         <h2 className="section-title" id="scope-features">
           What this version does
         </h2>
+        <p>
+          Not every lab here works the same way, so each one below carries a plain label that says
+          how it really runs. <strong>Live AI</strong> means an AI model on a server helps answer
+          or explain, only after you agree, and only when this site is connected to one.{' '}
+          <strong>On-device</strong> means the lab runs entirely in your browser with fixed
+          measurements or written rules, and nothing you type or record is sent anywhere.{' '}
+          <strong>Simulation</strong> means you are exploring a made-up example or a scripted
+          exercise: it does not measure you at all. If a label says on-device or simulation, no AI
+          model was involved in that lab, whatever its name suggests.
+        </p>
         {FEATURE_GROUPS.map((rawGroup) => {
           const group = groupLabel(rawGroup);
           const features = FEATURES.filter((feature) => feature.group === group);
@@ -63,7 +75,10 @@ export default function ScopePage() {
                     <a href={`#lab/${feature.id}`}>
                       <strong>{feature.name}</strong>
                     </a>{' '}
-                    <MaturityBadge maturity={feature.maturity} />
+                    <MaturityBadge maturity={feature.maturity} />{' '}
+                    <span className="badge badge-mode">
+                      {featureModeLabel(feature, apiConfigured)}
+                    </span>
                     <br />
                     <span className="muted">{feature.tagline}</span>
                     {feature.limitations && (

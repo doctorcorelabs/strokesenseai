@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { getFeature } from '../../../shared/registry';
 import { EmergencyBanner, MaturityBadge, ModeBadge, UncertaintyNote } from '../../components/ui';
+import HowItWorks from '../../components/HowItWorks';
 import {
   NIHSS_CASES,
   NIHSS_ITEMS,
@@ -396,6 +397,8 @@ export function NihssTrainer() {
       ) : (
         <ExamMode reviewItem={reviewItem} />
       )}
+
+      {feature && <HowItWorks feature={feature} />}
     </div>
   );
 }

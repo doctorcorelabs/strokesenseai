@@ -6,6 +6,8 @@
 export interface DocumentSample {
   id: string;
   title: string;
+  /** Optional one-line explanation shown under the title on the sample button. */
+  note?: string;
   text: string;
 }
 
@@ -64,7 +66,8 @@ export const RISK_SAMPLES: DocumentSample[] = [
   },
   {
     id: 'risk-fictional-3',
-    title: 'Contoh fiktif 3: riwayat berbahasa Indonesia',
+    title: 'Fictional sample 3: history written in Indonesian',
+    note: 'The sample text itself is in Indonesian, to show that the parser accepts Indonesian input too.',
     text: 'Contoh fiktif. Pasien memiliki riwayat hipertensi dan diabetes sejak lima tahun lalu. Ia berhenti merokok tiga tahun lalu setelah merokok selama 20 tahun. Kolesterol tinggi diketahui dari pemeriksaan tahun lalu. Ibu pasien pernah mengalami stroke.',
   },
 ];

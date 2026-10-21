@@ -10,6 +10,7 @@ import {
 } from './guideline-cards';
 import type { EvidenceCard } from './guideline-cards';
 import {
+  EXAMPLE_QUESTIONS,
   TREE_ROOT_ID,
   answerFromCards,
   cardsForNode,
@@ -42,7 +43,9 @@ type Tab = 'topics' | 'guided' | 'ask';
  */
 export default function GuidelineNavigator() {
   const api = getApiBase();
-  const [tab, setTab] = useState<Tab>('topics');
+  // Ask is the entry point: the question box is the primary element of the
+  // workspace, and browsing topics or the guided tree are the alternatives.
+  const [tab, setTab] = useState<Tab>('ask');
   const [topicId, setTopicId] = useState<string>(GUIDELINE_TOPICS[0]?.id ?? '');
   const [path, setPath] = useState<string[]>([TREE_ROOT_ID]);
   const [question, setQuestion] = useState('');
@@ -56,8 +59,8 @@ export default function GuidelineNavigator() {
   const answer = asked ? answerFromCards(asked) : null;
   const currentNode = getTreeNode(path[path.length - 1] ?? TREE_ROOT_ID);
 
-  function runAsk() {
-    const trimmed = question.trim();
+  function runAsk(text?: string) {
+    const trimmed = (text ?? question).trim();
     if (!trimmed) return;
     setAiReply('');
     setAiError('');
@@ -137,6 +140,14 @@ export default function GuidelineNavigator() {
         <div className="dk-tabs" role="group" aria-label="Guideline Navigator modes">
           <button
             type="button"
+            className={`dk-tab${tab === 'ask' ? ' is-active' : ''}`}
+            aria-pressed={tab === 'ask'}
+            onClick={() => setTab('ask')}
+          >
+            Ask a question
+          </button>
+          <button
+            type="button"
             className={`dk-tab${tab === 'topics' ? ' is-active' : ''}`}
             aria-pressed={tab === 'topics'}
             onClick={() => setTab('topics')}
@@ -150,14 +161,6 @@ export default function GuidelineNavigator() {
             onClick={() => setTab('guided')}
           >
             Guided questions
-          </button>
-          <button
-            type="button"
-            className={`dk-tab${tab === 'ask' ? ' is-active' : ''}`}
-            aria-pressed={tab === 'ask'}
-            onClick={() => setTab('ask')}
-          >
-            Ask a question
           </button>
         </div>
       </section>
@@ -251,9 +254,24 @@ export default function GuidelineNavigator() {
             Ask a question
           </h2>
           <p className="muted">
-            Example questions: &quot;What is the time window for thrombolysis?&quot; or &quot;When
-            is aspirin started after stroke?&quot; General education only, in English.
+            Type your own question, or tap an example. Every example below is covered by the card
+            library. General education only, in English.
           </p>
+          <div className="dk-chip-row" role="group" aria-label="Example questions">
+            {EXAMPLE_QUESTIONS.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="dk-tab"
+                onClick={() => {
+                  setQuestion(example);
+                  runAsk(example);
+                }}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
           <div className="dk-actions">
             <input
               className="dk-input"
@@ -266,9 +284,25 @@ export default function GuidelineNavigator() {
               placeholder="Type an education question about stroke guidelines"
               aria-label="Guideline question"
             />
-            <button type="button" className="btn btn-primary" onClick={runAsk}>
+            <button type="button" className="btn btn-primary" onClick={() => runAsk()}>
               Search the cards
             </button>
+          </div>
+          <p className="muted">Or jump straight to a topic:</p>
+          <div className="dk-chip-row" role="group" aria-label="Jump to a topic">
+            {GUIDELINE_TOPICS.map((topic) => (
+              <button
+                key={topic.id}
+                type="button"
+                className="dk-tab"
+                onClick={() => {
+                  setTopicId(topic.id);
+                  setTab('topics');
+                }}
+              >
+                {topic.label}
+              </button>
+            ))}
           </div>
 
           {emergency && (

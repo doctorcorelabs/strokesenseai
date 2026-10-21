@@ -6,6 +6,18 @@ All notable changes to StrokeSense AI Lab are recorded in this file. Versions fo
 
 Fixes and hardening from the 15-analyst audit of the Phase 0 build (2026-10-20). No feature behavior changes for end users beyond correctness and safety of what already shipped.
 
+### User-facing simplification (P0 package, 2026-10-21)
+
+From the UX audit of the live build (15 analysts, 2026-10-21): the lab experience was simplified without removing any feature or weakening any safety rule.
+
+- Lab pages are much shorter: the interactive workspace now comes first, right under the page title, and the About text, the AI coach, the cannot-analyze example, and the limitations moved into one collapsible "About and help" section below it. The permanent cannot-analyze panel no longer sits on every lab page; it appears only when an analysis actually cannot run.
+- Consent is asked once per session for each scope instead of being reset on every lab page, every text edit, and every redaction. Earlier results are marked "text changed, run again" instead of being deleted.
+- Every feature now carries one honest mode label computed from how that feature actually works (live AI, on-device, or simulation) in place of the single site-wide badge, so a scripted or on-device lab is no longer badged "Live AI" just because the API is configured. The Scope page list uses the same per-feature labels, with a short plain-language explanation of the three modes.
+- The hub gained a "Start here" section with a small set of curated starter labs, a featured card for the Digital FAST flagship, and per-card icons and time estimates that show what each lab needs (camera, microphone, text, or no input).
+- Sample buttons are now consistent everywhere: one click loads the built-in example and runs it, instead of load, consent, then analyze as separate steps.
+- Registry summaries, hub taglines, and coach text were rewritten to describe the input and method each feature really uses; camera, pose tracking, OCR, and AI wording was removed from features that do not have them, and the Dysarthria Analyzer's Indonesian practice mode was removed from this English release.
+- Each lab page now shows a "How this works" section from the registry, including an explicit "No AI model" note for the labs that run on fixed rules.
+
 ### Changed
 
 - Turnstile is now optional and off by default (product decision, 2026-10-21): when no `TURNSTILE_SECRET` is configured the Worker skips the verification in every environment instead of failing closed; the check activates only when a secret is set. Bot protection rests on server-issued consent tokens, per-feature rate limiting, and CORS origin checks.

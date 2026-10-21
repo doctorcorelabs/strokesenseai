@@ -79,3 +79,26 @@ Use verbs and nouns that describe measurement, learning, and practice instead of
 ## When in doubt
 
 If a sentence feels like it would make a good advertisement for a medical product, it is probably a forbidden claim for this one. Rewrite it to describe a measurement, an exercise, or a simulation, or delete it.
+
+## Follow-up audit note: UX audit, 21 October 2026
+
+A 15-analyst UX audit of the live Phase 1 build compared what the site promises (registry copy, hub cards, About panels, coach modules) against what each feature actually does. The audit found no forbidden diagnosis or detection claims, but it found a systematic promise-versus-reality gap: several features were described as camera-based or AI-driven while their implementations are manual, scripted, or rule-based. Under the impression test in the procedure above, copy like this fails even when no single forbidden word appears, because a visitor would reasonably believe a capability exists that does not.
+
+### Gaps found
+
+- **Motor group (4 features).** Registry summaries and coach modules describe camera pose tracking, hand landmark tracking, and full-body pose measurement. No Motor workspace uses a camera at all: the implementations are a pointer pad, tap counting, manual buttons plus a phone tilt sensor, and an on-screen dot test. The FAST Vision Check also does not contain the face and arm chain its registry entry describes.
+- **Face labs.** The Face Symmetry Analyzer and Face Dynamics have no detection model. The user places 16 landmarks by hand, up to five times per Dynamics session, while the feature names and registry copy imply automatic camera analysis.
+- **Clinical Reasoning group (5 features).** All five are deterministic scripted quizzes; the registry itself records "No AI model" for them, but hub taglines advertise an "AI examiner" and a "model-driven virtual patient".
+- **Speech group (3 features).** Registry copy promises transcription through the Worker and voice answers; the implementations are typing-only with local rules, and the analyzer uses browser speech recognition without the consent flow the copy implies.
+- **Discharge Lens AI.** The name and registry promise photo, PDF, and OCR input. The implementation is a paste-text box only, with no AI involved.
+- **Digital FAST flagship.** The registry promises AI-measured signals in a 15 to 20 second session. The implementation shows a camera preview while the user fills in a manual checklist of roughly 35 to 45 interactions.
+- **Global mode badge.** Hub cards and lab headers derived one mode label from a single site-wide configuration flag, so deterministic features were badged "Live AI" whenever the API was configured, contradicting the offline badge on their own pages.
+
+A related structural finding: the registry `models` and `retention` fields, which describe each feature honestly (including "No AI model"), were never rendered anywhere in the UI, so the honest description existed in the codebase but was invisible to users.
+
+### Status after the P0 fix package (21 October 2026)
+
+- Registry copy, hub taglines, and coach modules for the features above have been rewritten to name the input and method that actually exist (simulation, pointer, tap counting, paste-text, scripted cases). Camera, pose tracking, OCR, and AI wording was removed where the capability does not exist.
+- Mode labels are now computed per feature from the feature's own behavior (live AI, on-device, simulation) by a single shared helper, replacing the global configuration badge on hub cards, lab headers, and the Scope page list.
+- The registry `models` field is now rendered on every lab page as a "How this works" section, so the honest per-feature description is visible where the feature is used.
+- Open items deliberately left for later phases, recorded here so they are not lost: building real camera detection for the Motor and Face labs (or permanently reframing them as practice tools), renaming FAST Vision Check to match its content, and adding a photo or PDF path to the Discharge Lens or renaming it to match the paste-text implementation.

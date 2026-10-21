@@ -22,6 +22,11 @@ import {
   UncertaintyNote,
 } from '../../components/ui';
 import ToolCoach from '../../ai/ToolCoach';
+import PermissionPrime, {
+  PermissionDenied,
+  permissionFailureFromError,
+} from '../../components/PermissionPrime';
+import type { PermissionFailure } from '../../components/PermissionPrime';
 import { createRng } from './rng';
 import {
   CALIBRATION_POINTS_5,
@@ -84,7 +89,8 @@ export default function GazeTracker() {
   const [calMap, setCalMap] = useState<LinearMap | null>(null);
   const [calError, setCalError] = useState<number | null>(null);
   const [calFailed, setCalFailed] = useState(false);
-  const [cameraError, setCameraError] = useState('');
+  const [cameraFailure, setCameraFailure] = useState<PermissionFailure | null>(null);
+  const [cameraLive, setCameraLive] = useState(false);
 
   const [running, setRunning] = useState<ExerciseKind | null>(null);
   const [saccadeTarget, setSaccadeTarget] = useState<NormPoint | null>(null);
@@ -171,15 +177,18 @@ export default function GazeTracker() {
   }
 
   async function startCamera() {
-    setCameraError('');
+    setCameraFailure(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraFailure('unavailable');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      setCameraError(
-        'The camera could not be started. Pointer practice and the synthetic demo remain available.',
-      );
+      setCameraLive(true);
+    } catch (caught) {
+      setCameraFailure(permissionFailureFromError(caught));
     }
   }
 
@@ -187,7 +196,25 @@ export default function GazeTracker() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraLive(false);
   }
+
+  const cameraExits = [
+    {
+      label: 'Use pointer practice instead',
+      onSelect: () => {
+        setMode('pointer');
+        resetCalibration();
+      },
+    },
+    {
+      label: 'Use the synthetic demo instead',
+      onSelect: () => {
+        setMode('synthetic');
+        resetCalibration();
+      },
+    },
+  ];
 
   function moveTargetDot(point: NormPoint) {
     const dot = targetDotRef.current;
@@ -388,17 +415,30 @@ export default function GazeTracker() {
           {mode === 'synthetic' &&
             'Generated readings with a known scale error and noise are calibrated and scored, so you can watch the math work and see the cannot calibrate state when the signal is shaky.'}
         </p>
-        {mode === 'camera' && (
-          <div className="badge-row">
-            <button type="button" className="btn" onClick={startCamera}>
-              Start camera preview
-            </button>
-            <button type="button" className="btn" onClick={stopCamera}>
-              Stop camera
-            </button>
-            {cameraError && <span role="alert">{cameraError}</span>}
-          </div>
-        )}
+        {mode === 'camera' &&
+          (cameraFailure ? (
+            <PermissionDenied
+              device="camera"
+              failure={cameraFailure}
+              onRetry={() => void startCamera()}
+              exits={cameraExits}
+            />
+          ) : cameraLive ? (
+            <div className="badge-row">
+              <span role="status">Camera preview is on. It stays on this device.</span>
+              <button type="button" className="btn" onClick={stopCamera}>
+                Stop camera
+              </button>
+            </div>
+          ) : (
+            <PermissionPrime
+              device="camera"
+              why="Your webcam preview appears inside the stage so you can position yourself while you practice; calibration and scoring still use your pointer."
+              privacyNote="The video is shown on this device only and is never uploaded, stored, or analyzed."
+              onStart={() => void startCamera()}
+              exits={cameraExits}
+            />
+          ))}
         <div className="badge-row" role="group" aria-label="Calibration grid">
           <span>Calibration points:</span>
           <button

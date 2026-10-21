@@ -66,6 +66,18 @@ export function scoreCards(question: string): ScoredCard[] {
 export const REFUSAL_TEXT =
   'The local card library does not cover that question, so this tool will not guess. Try one of the listed topics, or consult the official guideline documents and your local stroke protocol. Answers here are general education, never a recommendation for an individual case.';
 
+/**
+ * One-click example questions shown as chips in the Ask mode. Every entry
+ * is covered by the card library above; a unit test pins that none of them
+ * is ever refused, so a chip can never lead to a dead end.
+ */
+export const EXAMPLE_QUESTIONS: string[] = [
+  'What is the time window for thrombolysis?',
+  'When is aspirin started after stroke?',
+  'What blood pressure is allowed before thrombolysis?',
+  'When should anticoagulation be started after stroke with atrial fibrillation?',
+];
+
 export interface GuidelineAnswer {
   /** Top matching cards, best first. Empty when refused. */
   cards: EvidenceCard[];

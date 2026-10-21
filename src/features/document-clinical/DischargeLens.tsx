@@ -39,30 +39,39 @@ export default function DischargeLens() {
   const [piiFindings, setPiiFindings] = useState<PiiFinding[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedFactId, setSelectedFactId] = useState<string | null>(null);
+  const [analyzedText, setAnalyzedText] = useState<string | null>(null);
 
   const result = outcome?.data ?? null;
+  const resultsStale = outcome !== null && analyzedText !== null && text !== analyzedText;
   const selectedFact = result?.facts.find((fact) => fact.id === selectedFactId) ?? null;
   const highlightedLines = new Set(selectedFact ? selectedFact.sourceLineIds : []);
   const unreadableIds = new Set(result?.unreadableLines.map((line) => line.id) ?? []);
 
   function resetResult() {
     setOutcome(null);
+    setAnalyzedText(null);
     setSelectedFactId(null);
     setPiiFindings(null);
   }
 
+  // Loading a sample is a single action: the sample appears in the box and
+  // its analysis runs at once. Built-in samples are fictional, so consent
+  // counts as given for them (the note under the buttons says so).
   function loadSample(sampleText: string) {
     setText(sampleText);
-    setConfirmed(false);
+    setConfirmed(true);
     setNotice(null);
-    resetResult();
+    void analyzeText(sampleText);
   }
 
+  // Editing never unticks the consent checkbox and never deletes an
+  // existing result. The old result stays on screen, marked stale by the
+  // line under the buttons, until the analysis runs again. PII findings
+  // are cleared because they point at exact positions in the old text.
   function editText(value: string) {
     setText(value);
-    setConfirmed(false);
     setNotice(null);
-    resetResult();
+    setPiiFindings(null);
   }
 
   function clearDocument() {
@@ -72,18 +81,20 @@ export default function DischargeLens() {
     resetResult();
   }
 
-  async function analyze() {
+  async function analyzeText(value: string) {
     setBusy(true);
     setNotice(null);
     setPiiFindings(null);
     try {
-      const next = await analyzeDischargeText(text);
+      const next = await analyzeDischargeText(value);
       setOutcome(next);
+      setAnalyzedText(value);
       setSelectedFactId(null);
     } catch (caught) {
       if (caught instanceof PiiBlockedError) {
+        // A blocked re-run keeps any earlier result on screen, marked
+        // stale, instead of deleting it.
         setPiiFindings(caught.findings);
-        setOutcome(null);
       } else {
         setNotice('The local analysis could not run. Check the text and try again.');
       }
@@ -92,13 +103,16 @@ export default function DischargeLens() {
     }
   }
 
+  function analyze() {
+    void analyzeText(text);
+  }
+
   function applyRedactions() {
     if (!piiFindings) return;
     setText(redactPii(text, piiFindings));
     setPiiFindings(null);
-    setConfirmed(false);
     setNotice(
-      'The flagged patterns were replaced with [removed]. Review the text, confirm the checkbox, then run the analysis again.',
+      'The flagged patterns were replaced with [removed]. Review the text, then run the analysis again.',
     );
   }
 
@@ -135,13 +149,19 @@ export default function DischargeLens() {
             <button
               key={sample.id}
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost dc-sample-btn"
               onClick={() => loadSample(sample.text)}
             >
-              {sample.title}
+              <span>{sample.title}</span>
+              {sample.note && <span className="dc-sample-sub">{sample.note}</span>}
             </button>
           ))}
         </div>
+        <p className="dc-sample-note">Samples are fictional and need no consent.</p>
+        <p className="muted">
+          Use this for the discharge document a patient takes home from the hospital: its
+          diagnoses, medicines, follow-up plans, and warning signs.
+        </p>
         <label className="form-label" htmlFor="dl-text">
           Discharge summary text
         </label>
@@ -179,6 +199,11 @@ export default function DischargeLens() {
             Clear document
           </button>
         </div>
+        {resultsStale && (
+          <p role="status" className="dc-stale-note">
+            Text changed, run again to refresh results.
+          </p>
+        )}
         {notice && (
           <p role="status" className="muted">
             {notice}

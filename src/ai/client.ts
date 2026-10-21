@@ -4,8 +4,13 @@
 // Consent wiring: live AI calls need a server-issued consent token. The UI
 // asks the person to agree first (the ToolCoach checkbox); only then does
 // this client record that consent with the Worker (POST /api/consent) and
-// attach the returned token to the tools request. Session ids and tokens
-// live in module memory only, never in browser storage, and die with the tab.
+// attach the returned token to the tools request. Agreement is per scope
+// and lasts for the whole browser session: the consent record (token plus
+// the scopes the person agreed to) is cached in module memory and mirrored
+// to sessionStorage, so agreeing in one lab covers every lab in the same
+// tab session and survives in-tab navigation. It dies with the tab, and
+// revokeSessionConsent() discards it immediately. The session id itself is
+// still held in module memory only.
 //
 // Turnstile: the site key is a public build-time value. When
 // VITE_TURNSTILE_SITE_KEY is set, this client loads Cloudflare's Turnstile
@@ -44,7 +49,13 @@ const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api
 
 function readEnv(name: string): string {
   const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
-  return (env[name] ?? '').trim();
+  const fromMeta = (env[name] ?? '').trim();
+  if (fromMeta) return fromMeta;
+  // Test harnesses stub variables through process.env, where import.meta.env
+  // does not always reflect them. The browser build never defines process,
+  // so this fallback is inert in production.
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return (proc?.env?.[name] ?? '').trim();
 }
 
 /** Public Worker origin from the build environment, without a trailing slash. */
@@ -172,7 +183,7 @@ async function buildHeaders(): Promise<Record<string, string>> {
 }
 
 // ---------------------------------------------------------------------------
-// Session and consent (module memory only; nothing is persisted)
+// Session and consent (module memory, mirrored to sessionStorage)
 // ---------------------------------------------------------------------------
 
 let sessionPromise: Promise<string> | null = null;
@@ -219,36 +230,139 @@ export function ensureSession(): Promise<string> {
 
 interface ConsentEntry {
   token: string;
+  /** Scopes the issued token itself covers (exactly what the Worker granted). */
   scopes: ConsentScope[];
+  /**
+   * Scopes the person has agreed to during this browser session. Wider
+   * than `scopes` is possible: agreement is remembered per scope even when
+   * a later recording replaced the token with a narrower one.
+   */
+  agreedScopes: ConsentScope[];
   expiresAt: number;
 }
 
+const CONSENT_STORAGE_KEY = 'ssai.consent.v1';
+const CONSENT_SCOPES: readonly ConsentScope[] = ['chat', 'vision', 'audio', 'tools'];
+
 let consentEntry: ConsentEntry | null = null;
+let consentLoaded = false;
+
+function consentStorage(): Storage | null {
+  try {
+    return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function isConsentScope(value: unknown): value is ConsentScope {
+  return typeof value === 'string' && (CONSENT_SCOPES as readonly string[]).includes(value);
+}
+
+/** Validate and restore a consent record written by an earlier page view. */
+function loadStoredConsent(): ConsentEntry | null {
+  const store = consentStorage();
+  if (!store) return null;
+  try {
+    const raw = store.getItem(CONSENT_STORAGE_KEY);
+    if (!raw) return null;
+    const data: unknown = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return null;
+    const record = data as { token?: unknown; scopes?: unknown; agreedScopes?: unknown; expiresAt?: unknown };
+    if (typeof record.token !== 'string' || !record.token) return null;
+    if (typeof record.expiresAt !== 'number' || !(record.expiresAt > 0)) return null;
+    const scopes = Array.isArray(record.scopes) ? record.scopes.filter(isConsentScope) : [];
+    const agreedScopes = Array.isArray(record.agreedScopes)
+      ? record.agreedScopes.filter(isConsentScope)
+      : [...scopes];
+    if (!scopes.length) return null;
+    return { token: record.token, scopes, agreedScopes, expiresAt: record.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function persistConsent(): void {
+  const store = consentStorage();
+  if (!store) return;
+  try {
+    if (consentEntry) {
+      store.setItem(CONSENT_STORAGE_KEY, JSON.stringify(consentEntry));
+    } else {
+      store.removeItem(CONSENT_STORAGE_KEY);
+    }
+  } catch {
+    // Storage full or blocked: the in-memory record still works this page.
+  }
+}
+
+/**
+ * The current consent record, restored from sessionStorage on first use in
+ * a page. Expired records are dropped (and cleared from storage) so a stale
+ * agreement never lingers into a new decision.
+ */
+function currentConsent(): ConsentEntry | null {
+  if (!consentLoaded) {
+    consentLoaded = true;
+    consentEntry = loadStoredConsent();
+  }
+  if (consentEntry && consentEntry.expiresAt <= Date.now()) {
+    consentEntry = null;
+    persistConsent();
+  }
+  return consentEntry;
+}
+
+function consentStillValid(entry: ConsentEntry): boolean {
+  return entry.expiresAt - 60_000 > Date.now();
+}
+
+/**
+ * Whether the person has already agreed to this scope in this browser
+ * session and that agreement is still comfortably valid. UI uses this to
+ * render the agreed state instead of asking for the same consent again in
+ * every lab.
+ */
+export function hasSessionConsent(scope: ConsentScope): boolean {
+  const entry = currentConsent();
+  return Boolean(entry && consentStillValid(entry) && entry.agreedScopes.includes(scope));
+}
+
+/**
+ * Discard the session consent: the cached token and the remembered
+ * agreement are dropped from memory and sessionStorage, so the next live
+ * AI request needs a fresh agreement and a fresh recording. The Worker
+ * session id is untouched; consent tokens are bearer proofs, so discarding
+ * the token is what stops this client from using it.
+ */
+export function revokeSessionConsent(): void {
+  consentLoaded = true;
+  consentEntry = null;
+  persistConsent();
+}
 
 /** The cached consent token covering a scope, if still comfortably valid. */
 function cachedConsentToken(scope: ConsentScope): string | null {
-  if (!consentEntry) return null;
-  if (consentEntry.expiresAt - 60_000 <= Date.now()) return null;
-  return consentEntry.scopes.includes(scope) ? consentEntry.token : null;
+  const entry = currentConsent();
+  if (!entry || !consentStillValid(entry)) return null;
+  return entry.scopes.includes(scope) ? entry.token : null;
 }
 
 /**
  * Record consent with the Worker and return the issued token. Call this
  * only after the person has explicitly agreed (the coach's consent box);
  * this function is the recording step, not the agreement itself. Tokens are
- * cached per scope set in module memory until shortly before they expire.
+ * cached per scope set until shortly before they expire, and the scopes
+ * the person agreed to are remembered for the rest of the browser session.
  */
 export async function requestConsentToken(scopes: ConsentScope[]): Promise<string> {
   const api = getApiBase();
   if (!api) {
     throw new Error('Live AI is not configured for this build. The local guide is available.');
   }
-  if (
-    consentEntry &&
-    consentEntry.expiresAt - 60_000 > Date.now() &&
-    scopes.every((scope) => consentEntry?.scopes.includes(scope))
-  ) {
-    return consentEntry.token;
+  const existing = currentConsent();
+  if (existing && consentStillValid(existing) && scopes.every((scope) => existing.scopes.includes(scope))) {
+    return existing.token;
   }
   const sessionId = await ensureSession();
   const headers = await buildHeaders();
@@ -275,11 +389,20 @@ export async function requestConsentToken(scopes: ConsentScope[]): Promise<strin
   }
   const expiresInSeconds =
     typeof record.expiresIn === 'number' && record.expiresIn > 0 ? record.expiresIn : 7200;
+  // A still-valid earlier agreement keeps its scopes: agreeing to one more
+  // scope never silently un-agrees another one within the same session.
+  const agreedScopes =
+    existing && consentStillValid(existing)
+      ? [...new Set([...existing.agreedScopes, ...scopes])]
+      : [...scopes];
   consentEntry = {
     token: record.token,
     scopes: [...scopes],
+    agreedScopes,
     expiresAt: Date.now() + expiresInSeconds * 1000,
   };
+  consentLoaded = true;
+  persistConsent();
   return record.token;
 }
 

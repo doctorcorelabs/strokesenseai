@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import { getFeature } from '../../../shared/registry';
 import { EmergencyBanner, MaturityBadge, ModeBadge, UncertaintyNote } from '../../components/ui';
+import HowItWorks from '../../components/HowItWorks';
 import {
   STROKE_CODE_SCENARIOS,
   addMinutesToClock,
@@ -324,6 +325,8 @@ export function StrokeCodeSimulator() {
       ) : (
         <ScenarioPicker onPick={setScenario} />
       )}
+
+      {feature && <HowItWorks feature={feature} />}
     </div>
   );
 }

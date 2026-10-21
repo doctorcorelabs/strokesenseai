@@ -17,8 +17,7 @@ import {
   compareToBaseline,
 } from './analysis';
 import type { AlignedWord, ReadingAnalysis } from './analysis';
-import { phrasesForLanguage, recognitionLocale } from './phrases';
-import type { PhraseLanguage } from './phrases';
+import { TEST_PHRASES, recognitionLocale } from './phrases';
 import { decodeSamples, useAudioRecorder } from './useAudioRecorder';
 import { useSpeechRecognition } from './useSpeechRecognition';
 
@@ -63,8 +62,7 @@ function WordHighlight({ analysis }: { analysis: ReadingAnalysis }) {
 
 export default function SpeechAnalyzer() {
   const [gate, setGate] = useState<GateChoice>('unset');
-  const [language, setLanguage] = useState<PhraseLanguage>('en');
-  const phrases = useMemo(() => phrasesForLanguage(language), [language]);
+  const phrases = TEST_PHRASES;
   const [phraseId, setPhraseId] = useState<string>(TEST_DEFAULT_PHRASE);
   const phrase = phrases.find((entry) => entry.id === phraseId) ?? phrases[0];
 
@@ -82,20 +80,13 @@ export default function SpeechAnalyzer() {
     [result, baseline],
   );
 
-  function switchLanguage(next: PhraseLanguage) {
-    setLanguage(next);
-    setPhraseId(phrasesForLanguage(next)[0].id);
-    setResult(null);
-    setCannotReason(null);
-  }
-
   function startCapture() {
     setCannotReason(null);
     setResult(null);
     recognition.clear();
     setTranscript('');
     recorder.start();
-    if (recognition.supported) recognition.start(recognitionLocale(language));
+    if (recognition.supported) recognition.start(recognitionLocale());
   }
 
   function stopCapture() {
@@ -188,22 +179,6 @@ export default function SpeechAnalyzer() {
             <h2 className="section-title" id="sa-phrase">
               1. Choose a sentence
             </h2>
-            <div className="badge-row" role="group" aria-label="Language mode">
-              <button
-                type="button"
-                className={language === 'en' ? 'btn btn-primary' : 'btn btn-ghost'}
-                onClick={() => switchLanguage('en')}
-              >
-                English mode
-              </button>
-              <button
-                type="button"
-                className={language === 'id' ? 'btn btn-primary' : 'btn btn-ghost'}
-                onClick={() => switchLanguage('id')}
-              >
-                Indonesian mode
-              </button>
-            </div>
             <label className="form-label" htmlFor="sa-phrase-select">
               Standard sentence
             </label>
@@ -223,7 +198,7 @@ export default function SpeechAnalyzer() {
               ))}
             </select>
             <p className="muted">{phrase.note}</p>
-            <p style={{ fontSize: '1.25rem', fontWeight: 600 }} lang={language}>
+            <p style={{ fontSize: '1.25rem', fontWeight: 600 }} lang="en">
               {phrase.text}
             </p>
           </section>
@@ -262,6 +237,9 @@ export default function SpeechAnalyzer() {
                     : ''}
               </span>
             </div>
+            <p className="muted">
+              Speech recognition uses your browser's built-in speech recognition.
+            </p>
             {recorder.error && <p role="alert">{recorder.error}</p>}
             {recorder.audioUrl && (
               <audio controls src={recorder.audioUrl}>

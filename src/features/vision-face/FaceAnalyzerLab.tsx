@@ -192,7 +192,7 @@ export default function FaceAnalyzerLab() {
           }}
         />
       ) : (
-        <PhotoMode mode={mode} />
+        <PhotoMode mode={mode} onSwitchMode={setMode} />
       )}
     </div>
   );
@@ -305,7 +305,13 @@ function SyntheticMode({
   );
 }
 
-function PhotoMode({ mode }: { mode: 'upload' | 'camera' }) {
+function PhotoMode({
+  mode,
+  onSwitchMode,
+}: {
+  mode: 'upload' | 'camera';
+  onSwitchMode: (mode: Mode) => void;
+}) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Partial<Record<LandmarkKey, { x: number; y: number }>>>({});
   const [stats, setStats] = useState<ImageStats | null>(null);
@@ -413,6 +419,10 @@ function PhotoMode({ mode }: { mode: 'upload' | 'camera' }) {
             setPhotoUrl(url);
             setPlaced({});
           }}
+          exits={[
+            { label: 'Upload a photo instead', onSelect: () => onSwitchMode('upload') },
+            { label: 'Use the synthetic lab instead', onSelect: () => onSwitchMode('synthetic') },
+          ]}
         />
       )}
 

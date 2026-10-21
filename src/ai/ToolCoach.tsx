@@ -1,10 +1,16 @@
 import type {} from '../vite-env';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Bot, LoaderCircle, LockKeyhole, Phone, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Bot, LoaderCircle, LockKeyhole, Phone, ShieldCheck, Sparkles } from 'lucide-react';
 import { LAB_RESOURCES, type LabSource } from '../../shared/lab';
 import { EMERGENCY_TEXT, mentionsAcuteSigns, RESOURCE_LINKS } from '../safety';
 import { ConsentNotice, MODE_LABELS } from '../components/ui';
-import { getApiBase, requestConsentToken, requestToolExplanation } from './client';
+import {
+  getApiBase,
+  hasSessionConsent,
+  requestConsentToken,
+  requestToolExplanation,
+  revokeSessionConsent,
+} from './client';
 import { matchOfflineTopic } from './offline';
 import './coach.css';
 
@@ -36,6 +42,11 @@ export default function ToolCoach({
   const selection = `${tool}:${moduleId}:${context}`;
   const [question, setQuestion] = useState('');
   const [consent, setConsent] = useState(false);
+  // Consent is a session-level agreement kept by the client module: once
+  // recorded for the "tools" scope it covers every lab in this tab session,
+  // so this coach opens already agreed instead of asking again per page.
+  const [sessionAgreed, setSessionAgreed] = useState(() => hasSessionConsent('tools'));
+  const [consentPrompt, setConsentPrompt] = useState(false);
   const [reply, setReply] = useState('');
   const [sources, setSources] = useState<LabSource[]>([]);
   const [pending, setPending] = useState(false);
@@ -43,8 +54,9 @@ export default function ToolCoach({
   const [error, setError] = useState('');
   const generation = useRef(0);
 
-  // A new tool or module invalidates the old answer and the old consent:
-  // consent given for one selection never silently covers another.
+  // A new tool or module invalidates the old answer, but not the consent:
+  // agreement is per scope for the whole session (see client.ts), so it is
+  // re-read here rather than reset when the lab changes.
   useEffect(() => {
     generation.current += 1;
     setReply('');
@@ -55,7 +67,8 @@ export default function ToolCoach({
   }, [selection]);
 
   useEffect(() => {
-    setConsent(false);
+    setSessionAgreed(hasSessionConsent('tools'));
+    setConsentPrompt(false);
     setQuestion('');
   }, [tool, moduleId]);
 
@@ -88,10 +101,11 @@ export default function ToolCoach({
       setMode('guide');
       return;
     }
-    if (!consent) {
-      setError(
-        'Acknowledge the data-sharing notice before requesting live AI. The local guide remains available without sending data.',
-      );
+    if (!consent && !sessionAgreed) {
+      // Not an error: the person simply has not agreed yet. Show a clear
+      // invitation in place of the old hard error and keep everything else
+      // on screen untouched.
+      setConsentPrompt(true);
       return;
     }
     const revision = generation.current;
@@ -103,6 +117,10 @@ export default function ToolCoach({
       let consentToken: string;
       try {
         consentToken = await requestConsentToken(['tools']);
+        if (revision === generation.current) {
+          setSessionAgreed(true);
+          setConsentPrompt(false);
+        }
       } catch (caught) {
         if (revision !== generation.current) return;
         setError(
@@ -136,6 +154,13 @@ export default function ToolCoach({
     } finally {
       if (revision === generation.current) setPending(false);
     }
+  }
+
+  function revokeConsent() {
+    revokeSessionConsent();
+    setSessionAgreed(false);
+    setConsent(false);
+    setConsentPrompt(false);
   }
 
   const displayedSources = sources.length ? sources : Object.values(LAB_RESOURCES);
@@ -205,12 +230,34 @@ export default function ToolCoach({
             {pending ? 'Explaining...' : api ? 'Explain with AI' : 'Show local guide'}
           </button>
         </div>
-        {api && (
-          <ConsentNotice
-            scopeLabel="this tool selection, its display settings, and your question"
-            checked={consent}
-            onChange={setConsent}
-          />
+        {api &&
+          (sessionAgreed ? (
+            <p className="coach-consent-given">
+              <ShieldCheck size={15} aria-hidden="true" />
+              <span>
+                AI consent given for this session. It covers live explanations in every lab until
+                you revoke it or close this tab.
+              </span>
+              <button type="button" className="coach-consent-revoke" onClick={revokeConsent}>
+                Revoke consent
+              </button>
+            </p>
+          ) : (
+            <ConsentNotice
+              scopeLabel="this tool selection, its display settings, and your question"
+              checked={consent}
+              onChange={(checked) => {
+                setConsent(checked);
+                if (checked) setConsentPrompt(false);
+              }}
+            />
+          ))}
+        {api && consentPrompt && !consent && !sessionAgreed && (
+          <p className="coach-consent-prompt">
+            One step before live AI: tick the agreement box above so the service may process your
+            question, then press Explain with AI again. Prefer not to send anything? The prewritten
+            guide shown above still works without sending data.
+          </p>
         )}
       </form>
 

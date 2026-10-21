@@ -43,6 +43,10 @@ export default function PlainTranslator() {
   const [input, setInput] = useState('');
   const [target, setTarget] = useState<PlainTarget>('en');
   const [result, setResult] = useState<ProducedResult | null>(null);
+  // The data-sharing notice belongs to the AI path only. It stays hidden
+  // until the visitor actually chooses "Simplify with AI"; the local path
+  // never shows it and never needs it.
+  const [aiRequested, setAiRequested] = useState(false);
   const [consent, setConsent] = useState(false);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState('');
@@ -78,8 +82,11 @@ export default function PlainTranslator() {
       return;
     }
     if (!consent) {
+      // First click on the AI path only reveals the notice; nothing is sent
+      // until the visitor ticks its box and presses the AI button again.
+      setAiRequested(true);
       setNotice(
-        'Acknowledge the data-sharing notice before requesting live AI. The local simplify button needs no consent and sends nothing.',
+        'Live AI would send the pasted text to the AI service, so its data-sharing notice is now shown above the buttons. Tick its box, then press Simplify with AI again. Nothing has been sent yet. The local simplify button needs no consent and sends nothing.',
       );
       return;
     }
@@ -190,7 +197,8 @@ export default function PlainTranslator() {
           placeholder="Paste medical text here, for example a discharge summary paragraph."
         />
         <p className="muted">
-          {input.length} / {MAX_CHARS} characters
+          {input.length} / {MAX_CHARS} characters. Simplify on this device accepts up to{' '}
+          {MAX_CHARS} characters; Simplify with AI accepts up to {AI_MAX_CHARS} characters.
         </p>
 
         <div className="dk-actions" role="group" aria-label="Target language">
@@ -211,11 +219,13 @@ export default function PlainTranslator() {
           </button>
         </div>
 
-        <ConsentNotice
-          scopeLabel="the text you pasted"
-          checked={consent}
-          onChange={setConsent}
-        />
+        {(aiRequested || consent) && (
+          <ConsentNotice
+            scopeLabel="the text you pasted"
+            checked={consent}
+            onChange={setConsent}
+          />
+        )}
         <div className="dk-actions">
           <button
             type="button"
@@ -229,11 +239,19 @@ export default function PlainTranslator() {
             type="button"
             className="btn btn-ghost"
             onClick={runAi}
-            disabled={pending || input.trim().length === 0}
+            disabled={pending || input.trim().length === 0 || input.length > AI_MAX_CHARS}
+            aria-describedby={input.length > AI_MAX_CHARS ? 'pt-ai-limit' : undefined}
           >
             {pending ? 'Asking AI...' : 'Simplify with AI'}
           </button>
         </div>
+        {input.length > AI_MAX_CHARS && (
+          <p className="muted" id="pt-ai-limit">
+            Simplify with AI is unavailable for this text: live AI accepts up to {AI_MAX_CHARS}{' '}
+            characters at a time and the box now holds {input.length}. Shorten the text, or use
+            Simplify on this device, which accepts the full {MAX_CHARS} characters.
+          </p>
+        )}
         {notice && <p role="note">{notice}</p>}
         {emergency && (
           <p role="alert">

@@ -1,0 +1,58 @@
+/* PermissionPrime: shared device-permission priming and blocked states.
+   Uses the global design tokens from styles.css so the card looks the
+   same in every lab, whichever feature stylesheet is loaded. */
+
+.permission-prime {
+  background: var(--mint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.1rem;
+  margin: 0.75rem 0;
+}
+
+.permission-prime-why {
+  font-weight: 600;
+  color: var(--deep);
+  margin-bottom: 0.35rem;
+}
+
+.permission-prime p {
+  margin-bottom: 0.6rem;
+}
+
+.permission-prime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.permission-exits {
+  margin-top: 0.85rem;
+}
+
+.permission-exit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.permission-denied {
+  border-left: 4px solid var(--red);
+  background: var(--red-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.9rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.permission-denied p {
+  margin-bottom: 0.5rem;
+}
+
+.permission-denied-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}

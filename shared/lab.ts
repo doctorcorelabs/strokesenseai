@@ -40,8 +40,8 @@ export const LAB_MODULES = {
       'Multimodal FAST session',
       [
         'FAST stands for Face, Arm, Speech, and Time to call emergency services, and this lab combines short face, arm, and speech tasks in one guided session.',
-        'Each modality is measured and reported separately, with its own data quality. There is no combined score, and one modality never fills in for another that failed.',
-        'Face and arm signals are measured locally in the browser. Speech is only sent for transcription after explicit consent.',
+        'Each step is observed and reported separately, with its own data quality. There is no combined score, and one step never fills in for another that failed.',
+        'Nothing is measured automatically: the camera is only a framing preview, and every measurement in this session is a human checklist observation recorded in the browser.',
         'A task that fails its quality gate reports cannot analyze. If stroke signs are happening now, skip the session and call 119 in Indonesia.',
       ],
       ['symptoms', 'stroke', 'emergency'],
@@ -51,7 +51,7 @@ export const LAB_MODULES = {
     'face-analyzer': module(
       'Face geometry measurement',
       [
-        'Facial landmarks let software describe geometry, such as the relative height of the two mouth corners normalized to the distance between the pupils.',
+        'Facial landmarks let software describe geometry, such as the relative height of the two mouth corners normalized to the distance between the pupils. In this lab the default mode uses generated synthetic faces, and on a real photo you place the landmarks by hand, one click at a time, because this build has no landmark detection model.',
         'Head pose, lighting differences between the sides, and photo blur can all change a geometric measurement without any change in the person.',
         'A geometric measurement is not a medical finding. This module makes no classification of any pattern and locates no lesion.',
         'Sudden facial drooping is a medical emergency. Call 119 in Indonesia immediately rather than measuring or photographing it.',
@@ -62,8 +62,8 @@ export const LAB_MODULES = {
       'Facial movement over time',
       [
         'Clinicians assess facial weakness through movement, such as smiling and raising the eyebrows, not from a single still position.',
-        'Blendshape coefficients describe how strongly facial regions move over time and can be plotted as curves.',
-        'Curves from a consumer webcam are noisy practice data. This module never labels a pattern in user data.',
+        'Landmark positions for each pose, from a synthetic performer or placed by hand on a photo or snapshot, describe how strongly facial regions move over time and can be plotted as curves.',
+        'Curves built from hand-placed landmarks are noisy practice data. This module never labels a pattern in user data.',
       ],
       ['symptoms', 'stroke'],
     ),
@@ -73,8 +73,8 @@ export const LAB_MODULES = {
       'Eye movement exercises',
       [
         'Eye examination in neurology includes following a moving target, looking quickly between targets, and holding gaze to the side.',
-        'Calibration quality decides whether a webcam session can measure anything at all, and a failed calibration is reported instead of estimated.',
-        'A consumer webcam records at about 30 frames per second, which is too coarse to characterize clinical eye movement findings.',
+        'Calibration quality decides whether the pointer signal can measure anything at all, and a failed calibration is reported instead of estimated.',
+        'The webcam in this lab is a preview only and is never analyzed; the pointer stands in for gaze, and pointer practice is too coarse to characterize clinical eye movement findings.',
       ],
       ['stroke'],
     ),
@@ -124,14 +124,14 @@ export const LAB_MODULES = {
         'Picture naming is a classic language practice task: see a picture, then say or type its name.',
         'Answers can miss in different ways, for example a related word, a similar-sounding word, or a description instead of the name. These error types are educational labels in this lab, not validated findings.',
         'A cue ladder offers help in steps: a meaning hint, the first sound, then a small set of choices.',
-        'Speech recognition can mishear post-stroke speech, so the transcript can always be corrected before any feedback is given.',
+        'Typed answers can always be edited before any feedback is given, so a typing slip is not scored as a naming error.',
       ],
       ['stroke'],
     ),
     'aphasia-communication': module(
       'Sentence reconstruction with confirmation',
       [
-        'This practice starts from a typed or spoken fragment and offers two or three candidate sentences that might express the intended meaning.',
+        'This practice starts from a typed fragment, or one built by tapping words, and offers two or three candidate sentences from local patterns that might express the intended meaning.',
         'A candidate sentence is never treated as the words of the user until the user selects or edits it and confirms it.',
         'Confirmation matters because a reconstruction can sound fluent and still be wrong in meaning.',
         'Text to speech can read the confirmed sentence aloud. That is a playback feature, not an assessment.',
@@ -151,11 +151,11 @@ export const LAB_MODULES = {
   },
   motor: {
     'arm-drift': module(
-      'Arm drift measurement',
+      'Arm drift curves and pointer practice',
       [
         'In a drift check, both arms are held raised for about 10 seconds while an examiner watches for one side sinking.',
-        'Pose tracking can measure an arm angle over time and plot it, including gaps where landmarks were not visible.',
-        'Pose tracking cannot reliably measure forearm rotation, and a measured curve is not a clinical score.',
+        'The simulation plots arm angles from synthetic scenarios, and the pointer practice plots an angle mapped from the pointer position you hold on a pad.',
+        'Neither mode observes your real arm or forearm rotation, and a plotted curve is not a clinical score.',
         'New arm weakness is a medical emergency. Call 119 in Indonesia immediately instead of recording it.',
       ],
       ['symptoms', 'stroke', 'emergency'],
@@ -164,7 +164,7 @@ export const LAB_MODULES = {
       'Finger tapping practice',
       [
         'Finger tapping tasks look at speed, rhythm, and how consistent repeated movements are.',
-        'Slowness in tapping has many possible causes, including joint pain, fatigue, and camera frame rate.',
+        'Slowness in tapping has many possible causes, including joint pain, fatigue, and the input device used.',
         'This module deliberately shows no population norm table, because its numbers describe one recording session only.',
       ],
       ['stroke'],
@@ -172,18 +172,18 @@ export const LAB_MODULES = {
     'balance-lab': module(
       'Chair stand and sway practice',
       [
-        'Repeated chair stands are used in education to discuss leg strength and function over a fixed time window.',
-        'A 2D camera can only approximate body sway from a hip midpoint; it cannot measure pressure under the feet.',
+        'Repeated chair stands are used in education to discuss leg strength and function; here each stand is timed by a button tap, from you or a companion.',
+        'The sway task reads a phone motion sensor held against the body, or companion tap marks; it measures device tilt, not pressure under the feet.',
         'Standing tasks carry a real fall risk, so support within reach and a companion are part of the protocol.',
       ],
       ['stroke'],
     ),
     'fast-vision-check': module(
-      'Guided FAST camera flow',
+      'Peripheral dot noticing practice',
       [
-        'FAST stands for Face, Arm, Speech, and Time to call emergency services.',
-        'This guided flow reports each step separately and produces no combined score.',
-        'If symptoms are happening now, stop the flow and call 119 in Indonesia. A camera check can never rule out stroke.',
+        'Despite its name, this lab is a peripheral noticing screen test, not the face and arm steps of FAST.',
+        'Dots appear in the four screen quadrants, one eye at a time, and the result is a count of noticed dots per quadrant, with no combined score.',
+        'If symptoms are happening now, stop the test and call 119 in Indonesia. A screen dot test can never rule out stroke or a visual field problem.',
       ],
       ['symptoms', 'stroke', 'emergency'],
     ),
@@ -213,7 +213,7 @@ export const LAB_MODULES = {
       [
         'Last known well means the last time a person was known to be at their usual baseline, and time calculations in acute scenarios start from it.',
         'In these fictional scenarios, decision keys and time intervals are fixed by the case and computed by code, not by the model.',
-        'The model may narrate only the facts in the case template and may not add new clinical facts.',
+        'Explanations may narrate only the facts in the case template and may not add new clinical facts.',
       ],
       ['symptoms', 'stroke'],
     ),

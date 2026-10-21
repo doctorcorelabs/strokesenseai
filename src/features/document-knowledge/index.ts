@@ -12,7 +12,7 @@ export {
   GUIDELINE_TOPICS,
 } from './guideline-cards';
 export type { EvidenceCard, GuidelineTopic } from './guideline-cards';
-export { answerFromCards, scoreCards, DECISION_TREE } from './guideline-engine';
+export { answerFromCards, scoreCards, DECISION_TREE, EXAMPLE_QUESTIONS } from './guideline-engine';
 export { GLOSSARY, lookupTerm } from './glossary';
 export {
   extractLockedElements,

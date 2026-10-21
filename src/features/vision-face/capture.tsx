@@ -7,6 +7,11 @@
 // not bundle a machine learning landmark model; the UI says so openly.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import PermissionPrime, {
+  PermissionDenied,
+  permissionFailureFromError,
+} from '../../components/PermissionPrime';
+import type { PermissionExit, PermissionFailure } from '../../components/PermissionPrime';
 import type { FaceLandmarks, LandmarkKey } from './geometry';
 import { LANDMARK_KEYS } from './geometry';
 import { laplacianVariance, lightingBalance, toGrayscale } from './imageStats';
@@ -192,11 +197,19 @@ export function computeImageStats(imageUrl: string): Promise<ImageStats | null> 
 // CameraCapture: live preview with a guide oval, snapshot to a data URL
 // ---------------------------------------------------------------------------
 
-export function CameraCapture({ onSnapshot }: { onSnapshot: (dataUrl: string) => void }) {
+export function CameraCapture({
+  onSnapshot,
+  exits = [],
+}: {
+  onSnapshot: (dataUrl: string) => void;
+  /** Working routes that need no camera, offered before the request and
+   * again if it fails: upload, the synthetic lab, and so on. */
+  exits?: PermissionExit[];
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<PermissionFailure | null>(null);
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -207,9 +220,9 @@ export function CameraCapture({ onSnapshot }: { onSnapshot: (dataUrl: string) =>
   useEffect(() => stop, [stop]);
 
   const start = async () => {
-    setError(null);
+    setFailure(null);
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError('This browser does not offer camera access here. Use the upload option instead.');
+      setFailure('unavailable');
       return;
     }
     try {
@@ -223,8 +236,8 @@ export function CameraCapture({ onSnapshot }: { onSnapshot: (dataUrl: string) =>
         await videoRef.current.play().catch(() => undefined);
       }
       setRunning(true);
-    } catch {
-      setError('Camera access was not granted. Use the upload option instead; nothing was recorded.');
+    } catch (caught) {
+      setFailure(permissionFailureFromError(caught));
     }
   };
 
@@ -251,31 +264,35 @@ export function CameraCapture({ onSnapshot }: { onSnapshot: (dataUrl: string) =>
         <div className="vf-camera-guide" aria-hidden="true" />
         {!running && <div className="vf-stage-empty">Camera is off. Your video is never uploaded.</div>}
       </div>
-      {error && (
-        <p className="vf-note" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="vf-actions">
-        {!running ? (
-          <button type="button" className="btn btn-primary" onClick={start}>
-            Start camera
-          </button>
-        ) : (
-          <>
+      {running ? (
+        <>
+          <div className="vf-actions">
             <button type="button" className="btn btn-primary" onClick={snapshot}>
               Take snapshot
             </button>
             <button type="button" className="btn btn-ghost" onClick={stop}>
               Stop camera
             </button>
-          </>
-        )}
-      </div>
-      <p className="muted">
-        Position your face inside the oval, in even light, looking straight at the camera. The
-        snapshot stays in this tab and is processed on this device only.
-      </p>
+          </div>
+          <p className="muted">
+            Position your face inside the oval, in even light, looking straight at the camera.
+          </p>
+        </>
+      ) : failure ? (
+        <PermissionDenied
+          device="camera"
+          failure={failure}
+          onRetry={() => void start()}
+          exits={exits}
+        />
+      ) : (
+        <PermissionPrime
+          device="camera"
+          why="A live preview helps you frame a face inside the guide oval before you take a snapshot for landmark placement."
+          onStart={() => void start()}
+          exits={exits}
+        />
+      )}
     </div>
   );
 }
