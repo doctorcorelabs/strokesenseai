@@ -32,7 +32,7 @@ ENVIRONMENT = "production"
 # no paths and no trailing slashes. Empty intentionally fails closed:
 # every API request is rejected with 403 until this is set.
 # Do not use "*" and do not allow all preview domains.
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "https://strokesenseai.daivanlabs.com,https://strokesenseai.netlify.app"
 # One server-controlled model ID; clients cannot select models.
 OPENROUTER_MODEL = "openai/gpt-4o-mini"
 # Fallback per-IP budget per minute for features without their own limit,
