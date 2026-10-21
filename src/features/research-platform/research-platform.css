@@ -1,0 +1,264 @@
+/* Research Platform feature workspaces (Privacy Shield, Adaptive Tutor).
+   Scoped with the rp- prefix; colours and radii come from the global
+   design tokens in src/styles.css. */
+
+.rp-stack {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.rp-label {
+  display: block;
+  font-weight: 600;
+  color: var(--deep);
+  margin-bottom: 0.4rem;
+}
+
+.rp-textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 0.85rem 1rem;
+  border: 1.5px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--card);
+  resize: vertical;
+}
+
+.rp-textarea:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 1px;
+}
+
+.rp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.rp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rp-chip {
+  border: 1px solid var(--line);
+  background: var(--mint);
+  color: var(--deep);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.rp-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .rp-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rp-pane {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 1rem 1.1rem;
+  min-height: 160px;
+}
+
+.rp-pane h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.rp-pane-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.97rem;
+  line-height: 1.6;
+}
+
+.rp-mark {
+  border-radius: 4px;
+  padding: 0 2px;
+  color: var(--ink);
+}
+
+.rp-mark-name {
+  background: #f6d9d2;
+}
+
+.rp-mark-email {
+  background: #fbe3b8;
+}
+
+.rp-mark-phone {
+  background: #dcebc8;
+}
+
+.rp-mark-medical-record {
+  background: #d8e2f3;
+}
+
+.rp-mark-national-id {
+  background: #e6d9f2;
+}
+
+.rp-mark-date-of-birth {
+  background: #f3d1e3;
+}
+
+.rp-mark-date {
+  background: #d2ecec;
+}
+
+.rp-match-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.rp-match-list code {
+  background: var(--mint);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* --- Adaptive Tutor --- */
+
+.rp-level-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.rp-options {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.rp-option {
+  text-align: left;
+  width: 100%;
+  border: 1.5px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.rp-option:hover:not(:disabled) {
+  border-color: var(--green);
+}
+
+.rp-option:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.rp-option.is-correct {
+  border-color: var(--green);
+  background: var(--mint);
+}
+
+.rp-option.is-wrong {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+
+.rp-feedback {
+  margin-top: 1rem;
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+}
+
+.rp-feedback.is-correct {
+  background: var(--mint);
+}
+
+.rp-feedback.is-wrong {
+  background: var(--amber-soft);
+}
+
+.rp-feedback p {
+  margin: 0.3rem 0 0;
+}
+
+.rp-topic-bars {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.rp-bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr minmax(86px, auto);
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.rp-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.rp-bar-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+}
+
+.rp-ask-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.rp-ask-row .form-input {
+  flex: 1 1 260px;
+}
+
+.rp-error {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.rp-spinner {
+  animation: rp-spin 0.9s linear infinite;
+}
+
+@keyframes rp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-spinner {
+    animation: none;
+  }
+}

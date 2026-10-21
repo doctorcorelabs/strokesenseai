@@ -6,6 +6,7 @@ import { handleVision } from './handlers/vision.ts';
 import { handleAudio } from './handlers/audio.ts';
 import { handleConsentDelete, handleConsentPost } from './handlers/consent.ts';
 import { handleSession } from './handlers/session.ts';
+import { handleFeature } from './handlers/features.ts';
 import type { Env } from './types.ts';
 
 export type { Env } from './types.ts';
@@ -31,6 +32,7 @@ const FEATURE_ROUTES: Record<string, FeatureRoute> = {
   '/api/chat': { feature: 'chat', scope: 'chat', handler: handleChat },
   '/api/vision': { feature: 'vision', scope: 'vision', handler: handleVision },
   '/api/audio': { feature: 'audio', scope: 'audio', handler: handleAudio },
+  '/api/feature': { feature: 'feature', scope: 'tools', handler: handleFeature },
 };
 
 const API_PATHS = new Set([...Object.keys(FEATURE_ROUTES), '/api/session', '/api/consent']);

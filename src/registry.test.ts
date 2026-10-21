@@ -32,9 +32,10 @@ describe('feature registry', () => {
     }
   });
 
-  it('keeps every maturity at concept in phase 0', () => {
+  it('keeps every implemented feature at lab maturity in phase 1', () => {
     for (const feature of FEATURES) {
-      expect(feature.maturity).toBe('concept');
+      expect(feature.maturity).toBe('lab');
+      expect(feature.maturity).not.toBe('concept');
     }
   });
 

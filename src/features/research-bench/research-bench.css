@@ -1,0 +1,180 @@
+/* Research Platform (Model Bench + Transparency Dashboard) module styles.
+   Uses the shared design tokens from src/styles.css; layout and data
+   display only, no new palette. */
+
+.rb-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+
+.rb-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 1rem;
+}
+
+.rb-card h3 {
+  margin-top: 0;
+}
+
+.rb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin: 0.4rem 0;
+}
+
+.rb-stats strong {
+  color: var(--ink);
+}
+
+.rb-reply {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 0;
+}
+
+.rb-flags {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.rb-flag {
+  border: 1px solid var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.92rem;
+}
+
+.rb-flag strong {
+  display: block;
+  color: var(--amber);
+}
+
+.rb-flag span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.rb-clean {
+  border: 1px solid var(--green);
+  background: var(--mint);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.92rem;
+  margin-top: 0.6rem;
+}
+
+.rb-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rb-config-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rb-table-wrap {
+  overflow-x: auto;
+}
+
+.rb-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.rb-table th,
+.rb-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.rb-table th {
+  color: var(--deep);
+  font-family: var(--display);
+  white-space: nowrap;
+}
+
+.rb-table td.rb-num,
+.rb-table th.rb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-big-stats {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.rb-big-stat {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--mint);
+  padding: 0.9rem 1rem;
+}
+
+.rb-big-stat .rb-big-number {
+  display: block;
+  font-family: var(--display);
+  font-size: 2rem;
+  line-height: 1.1;
+  color: var(--deep);
+}
+
+.rb-big-stat .rb-big-label {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.rb-miss-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.rb-miss-list li {
+  margin-bottom: 0.35rem;
+}
+
+.rb-history-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.rb-history-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  background: var(--card);
+}
+
+.rb-history-item summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  align-items: baseline;
+}
+
+.rb-history-item summary .muted {
+  font-size: 0.9rem;
+}
+
+.rb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}

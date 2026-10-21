@@ -1,0 +1,277 @@
+/* Styles for the Document and Data AI labs (Discharge Lens, Risk Factor
+   Extractor). All classes are prefixed dc- so nothing leaks into or depends
+   on feature folders owned by other builders. Shared tokens and base
+   classes (panel, btn, badge, form-input, consent-box) come from the
+   global stylesheet. */
+
+.dc-privacy {
+  border: 2px solid var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+}
+
+.dc-privacy p {
+  margin: 0.4rem 0;
+}
+
+.dc-privacy-warning {
+  color: var(--red);
+}
+
+.dc-sample-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.6rem 0 1rem;
+}
+
+.dc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 0.8rem;
+}
+
+.dc-char-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.dc-blocked {
+  border: 2px solid var(--red);
+  background: var(--red-soft);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+}
+
+.dc-blocked ul {
+  margin: 0.5rem 0;
+  padding-left: 1.2rem;
+}
+
+.dc-layout {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 960px) {
+  .dc-layout {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+  }
+}
+
+.dc-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dc-line {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.dc-line-num {
+  flex: none;
+  min-width: 1.7rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--deep);
+  background: var(--mint);
+  border-radius: 999px;
+  padding: 0.1rem 0.3rem;
+}
+
+.dc-line-active {
+  border-color: var(--green);
+  background: var(--mint-strong);
+}
+
+.dc-line-unreadable {
+  opacity: 0.65;
+  font-style: italic;
+}
+
+.dc-category {
+  margin-bottom: 1.4rem;
+}
+
+.dc-category h3 {
+  margin: 0 0 0.6rem;
+}
+
+.dc-fact {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.55rem;
+}
+
+.dc-fact-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px var(--mint-strong);
+}
+
+.dc-fact-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dc-fact-detail {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.dc-chip {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.dc-chip-verified {
+  background: var(--mint);
+  color: var(--deep);
+  border-color: var(--green);
+}
+
+.dc-chip-unverified {
+  background: var(--red-soft);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.dc-chip-flag {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+button.dc-chip {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.dc-chip:hover {
+  border-color: var(--green);
+}
+
+.dc-table-wrap {
+  overflow-x: auto;
+}
+
+.dc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.dc-table th,
+.dc-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.dc-table th {
+  font-family: var(--display);
+  color: var(--deep);
+}
+
+.dc-status {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  white-space: nowrap;
+}
+
+.dc-status-present {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border: 1px solid var(--amber);
+}
+
+.dc-status-absent {
+  background: var(--mint);
+  color: var(--deep);
+  border: 1px solid var(--green);
+}
+
+.dc-status-not {
+  background: #eef1ee;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.dc-evidence {
+  font-size: 0.9rem;
+}
+
+.dc-source-text {
+  line-height: 1.7;
+  font-size: 0.98rem;
+}
+
+.dc-sentence-active {
+  background: var(--amber-soft);
+  outline: 2px solid var(--amber);
+  border-radius: 4px;
+  padding: 0 0.15rem;
+}
+
+.dc-edu-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+@media (min-width: 720px) {
+  .dc-edu-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.dc-edu-card {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  padding: 0.8rem 0.95rem;
+}
+
+.dc-edu-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.dc-edu-card p {
+  margin: 0;
+  font-size: 0.92rem;
+}

@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  worker:
+    name: Worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Dry-run deploy
+        run: npx wrangler deploy --dry-run
+
+  # Both Playwright projects (desktop and mobile) run on Chromium:
+  # playwright.config.ts defines the mobile project as Chromium-based
+  # mobile emulation, so installing Chromium alone is correct and the
+  # whole matrix really executes. (The earlier iPhone device descriptor
+  # silently required WebKit, which this step never installed, so the
+  # mobile half of the suite could not run at all.)
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      # Traces and screenshots are configured as retain-on-failure in
+      # playwright.config.ts; without this upload they would disappear
+      # with the runner and every CI failure would be undebuggable.
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Dependency vulnerability audit for both packages (root and worker).
+  # Report-only for now (continue-on-error): the audit baseline has not
+  # been confirmed on a real runner yet. The Phase 0 audit could not run
+  # this check locally because the development sandbox blocks the npm
+  # audit endpoint at its registry proxy (403 policy_denied), so no one
+  # has seen a clean baseline. Once a green baseline is confirmed on
+  # GitHub, remove continue-on-error so high-severity findings block
+  # merges; until then the job output is the record of what audit finds.
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Audit root dependencies
+        run: npm audit --audit-level=high
+
+      - name: Audit worker dependencies
+        working-directory: worker
+        run: npm audit --audit-level=high

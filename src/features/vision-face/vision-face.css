@@ -1,0 +1,269 @@
+/* Vision face labs (face-analyzer, face-dynamics). All classes are
+   namespaced vf- so this file can be imported by the feature folder only
+   without touching the global stylesheet. */
+
+.vf-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.vf-tab {
+  border: 1px solid var(--border, #cbd5e1);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.vf-tab[aria-selected='true'],
+.vf-tab[aria-pressed='true'] {
+  background: var(--accent, #0f766e);
+  color: #fff;
+  border-color: transparent;
+}
+
+.vf-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+}
+
+.vf-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1526;
+  cursor: crosshair;
+}
+
+.vf-stage-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vf-stage-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  color: #e2e8f0;
+}
+
+.vf-stage-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.vf-stage-point {
+  fill: #fbbf24;
+  stroke: #111827;
+  stroke-width: 0.4;
+}
+
+.vf-stage-point-label {
+  fill: #fbbf24;
+  font-size: 4px;
+  font-weight: 700;
+}
+
+.vf-sketch {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+}
+
+.vf-sketch-bg {
+  fill: #f8fafc;
+}
+
+.vf-sketch-outline {
+  fill: rgba(15, 118, 110, 0.06);
+  stroke: #0f766e;
+  stroke-width: 0.5;
+  stroke-dasharray: 2 1.4;
+}
+
+.vf-sketch-line {
+  stroke: #334155;
+  stroke-width: 0.45;
+}
+
+.vf-sketch-point {
+  fill: #b45309;
+}
+
+.vf-camera-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1526;
+  border: 1px solid var(--border, #cbd5e1);
+}
+
+.vf-camera-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.vf-camera-guide {
+  position: absolute;
+  inset: 12% 26%;
+  border: 2px dashed rgba(251, 191, 36, 0.9);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.vf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.vf-note {
+  border-left: 4px solid #b45309;
+  padding: 0.4rem 0.75rem;
+  background: rgba(180, 83, 9, 0.08);
+}
+
+.vf-metric-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.vf-metric {
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.vf-metric-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.vf-check-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.vf-check {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.vf-check-mark {
+  font-weight: 700;
+  min-width: 3.2rem;
+}
+
+.vf-check-pass {
+  color: #15803d;
+}
+
+.vf-check-low {
+  color: #b45309;
+}
+
+.vf-check-fail {
+  color: #b91c1c;
+}
+
+.vf-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.vf-table th,
+.vf-table td {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  vertical-align: top;
+}
+
+.vf-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.vf-chart-user {
+  stroke: #0f766e;
+  stroke-width: 2;
+  fill: none;
+}
+
+.vf-chart-ref {
+  stroke: #b45309;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+  fill: none;
+}
+
+.vf-chart-zero {
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+
+.vf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.vf-swatch {
+  display: inline-block;
+  width: 1.6rem;
+  height: 0;
+  border-top: 3px solid #0f766e;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+
+.vf-swatch-ref {
+  border-top: 3px dashed #b45309;
+}
+
+.vf-place-list {
+  columns: 2;
+  font-size: 0.92rem;
+}
+
+.vf-file-input {
+  margin: 0.5rem 0;
+}

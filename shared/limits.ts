@@ -19,5 +19,6 @@ export const RATE_LIMITS: Record<string, { perMinute: number; perHour?: number }
   chat: { perMinute: 15, perHour: 60 },
   vision: { perMinute: 6, perHour: 20 },
   audio: { perMinute: 10 },
+  feature: { perMinute: 10 },
   tools: { perMinute: 20 },
 };

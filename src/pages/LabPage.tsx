@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { getFeature } from '../../shared/registry';
 import type { FeatureEntry } from '../../shared/registry';
 import { LAB_MODULES } from '../../shared/lab';
@@ -9,6 +10,15 @@ import {
   ModeBadge,
   UncertaintyNote,
 } from '../components/ui';
+import {
+  FULL_PAGE_LABS,
+  SELF_BANNERED_IDS,
+  SPEECH_APHASIA_IDS,
+  SpeechAphasiaLab,
+  WORKSPACE_LABS,
+  LabLoading,
+  WorkspaceLoading,
+} from '../features/featureRoutes';
 
 type CoachResolution = {
   tool: string;
@@ -40,6 +50,33 @@ function inputSummary(feature: FeatureEntry): string {
   return feature.inputKinds.join(', ');
 }
 
+/**
+ * The cannot-analyze explainer from the Phase 0 page. It stays in this shell
+ * for every lab rendered here (guided walkthroughs and feature workspaces
+ * alike, below the workspace) so the page always shows what a refused
+ * analysis looks like. Full page labs render their own standalone pages and
+ * do not get this section from the shell.
+ */
+function CannotAnalyzeSection() {
+  return (
+    <section className="panel" aria-labelledby="lab-cannot">
+      <h2 className="section-title" id="lab-cannot">
+        When analysis is not possible
+      </h2>
+      <CannotAnalyzePanel
+        role="note"
+        reason="No input yet. This panel shows what a failed analysis looks like: the lab reports the problem instead of inventing a result."
+        guidance="When you use this lab with a real input, the lab checks the input first. If the input is missing, unclear, or below the quality needed, you will see this panel with the specific reason instead of a result."
+      />
+      <UncertaintyNote>
+        Every measurement in this lab is experimental. Values are shown with their input quality
+        and known limits, never as a clinical score, and a measurement that looks typical cannot
+        rule out stroke.
+      </UncertaintyNote>
+    </section>
+  );
+}
+
 export default function LabPage({ id }: { id: string }) {
   const feature = getFeature(id);
 
@@ -61,6 +98,24 @@ export default function LabPage({ id }: { id: string }) {
     );
   }
 
+  // Full page feature labs bring their own heading, badges, and emergency
+  // banner, so they replace this generic page entirely for their route id.
+  const FullPageLab = FULL_PAGE_LABS[id];
+  if (FullPageLab) {
+    return (
+      <Suspense fallback={<LabLoading />}>
+        <FullPageLab />
+      </Suspense>
+    );
+  }
+
+  // Workspace feature labs render inside this page shell, in the place of
+  // the generic guided walkthrough below. The speech and aphasia labs are
+  // served by one shared dispatcher that takes the feature id as a prop.
+  const WorkspaceLab = WORKSPACE_LABS[id];
+  const isSpeechAphasia = SPEECH_APHASIA_IDS.has(id);
+  const hasWorkspace = Boolean(WorkspaceLab) || isSpeechAphasia;
+
   const { tool, moduleId, exact } = resolveCoachProps(feature);
   const apiConfigured = Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
   const fallback =
@@ -80,7 +135,9 @@ export default function LabPage({ id }: { id: string }) {
         </div>
       </header>
 
-      <EmergencyBanner />
+      {/* Workspaces in SELF_BANNERED_IDS render their own emergency banner,
+          so the shell banner is skipped for them to avoid showing it twice. */}
+      {!SELF_BANNERED_IDS.has(id) && <EmergencyBanner />}
 
       <section className="panel" aria-labelledby="lab-summary">
         <h2 className="section-title" id="lab-summary">
@@ -103,50 +160,51 @@ export default function LabPage({ id }: { id: string }) {
         fallback={fallback}
       />
 
-      <section className="panel" aria-labelledby="lab-how">
-        <h2 className="section-title" id="lab-how">
-          How this experiment works
-        </h2>
-        <ol className="step-list">
-          <li>
-            <strong>You provide input.</strong> This lab works with {inputSummary(feature)}.
-            Sample inputs are synthetic by default. Providing real input is always opt-in, one
-            session at a time.
-          </li>
-          <li>
-            <strong>Processing stays local first.</strong> Measurements are computed in your
-            browser whenever the experiment allows it. Raw photos, audio, and video are not
-            uploaded by default.
-          </li>
-          <li>
-            <strong>AI explanation is optional.</strong> If you ask for one and consent to data
-            sharing, only the derived measurements and your question are sent through the
-            Cloudflare Worker to the AI provider. The AI explains the measurement; it never sets
-            the measurement, a score, or a conclusion.
-          </li>
-        </ol>
-        <p className="muted">
-          Guided walkthrough: this page explains the experiment step by step while its
-          interactive workspace is still being built, so there is nothing to run yet. The coach
-          above can already answer questions about the idea behind the lab.
-        </p>
-      </section>
+      {hasWorkspace ? (
+        <>
+          <Suspense fallback={<WorkspaceLoading />}>
+            {isSpeechAphasia ? (
+              <SpeechAphasiaLab id={id} />
+            ) : WorkspaceLab ? (
+              <WorkspaceLab />
+            ) : null}
+          </Suspense>
+          <CannotAnalyzeSection />
+        </>
+      ) : (
+        <>
+          <section className="panel" aria-labelledby="lab-how">
+            <h2 className="section-title" id="lab-how">
+              How this experiment works
+            </h2>
+            <ol className="step-list">
+              <li>
+                <strong>You provide input.</strong> This lab works with {inputSummary(feature)}.
+                Sample inputs are synthetic by default. Providing real input is always opt-in, one
+                session at a time.
+              </li>
+              <li>
+                <strong>Processing stays local first.</strong> Measurements are computed in your
+                browser whenever the experiment allows it. Raw photos, audio, and video are not
+                uploaded by default.
+              </li>
+              <li>
+                <strong>AI explanation is optional.</strong> If you ask for one and consent to data
+                sharing, only the derived measurements and your question are sent through the
+                Cloudflare Worker to the AI provider. The AI explains the measurement; it never sets
+                the measurement, a score, or a conclusion.
+              </li>
+            </ol>
+            <p className="muted">
+              Guided walkthrough: this page explains the experiment step by step while its
+              interactive workspace is still being built, so there is nothing to run yet. The coach
+              above can already answer questions about the idea behind the lab.
+            </p>
+          </section>
 
-      <section className="panel" aria-labelledby="lab-cannot">
-        <h2 className="section-title" id="lab-cannot">
-          When analysis is not possible
-        </h2>
-        <CannotAnalyzePanel
-          role="note"
-          reason="No input yet. This panel shows what a failed analysis looks like: the lab reports the problem instead of inventing a result."
-          guidance="When you use this lab with a real input, the lab checks the input first. If the input is missing, unclear, or below the quality needed, you will see this panel with the specific reason instead of a result."
-        />
-        <UncertaintyNote>
-          Every measurement in this lab is experimental. Values are shown with their input quality
-          and known limits, never as a clinical score, and a measurement that looks typical cannot
-          rule out stroke.
-        </UncertaintyNote>
-      </section>
+          <CannotAnalyzeSection />
+        </>
+      )}
 
       <section className="panel" aria-labelledby="lab-limits">
         <h2 className="section-title" id="lab-limits">

@@ -1,0 +1,118 @@
+/* Document and knowledge feature workspaces (Guideline Navigator and
+   Plain-Language Translator). Prefixed classes only; shared layout still
+   comes from the global stylesheet. */
+
+.dk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dk-tab {
+  border: 1px solid var(--line, #d8ddd6);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dk-tab.is-active {
+  background: var(--brand, #126454);
+  color: #fff;
+  border-color: transparent;
+}
+
+.dk-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dk-side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .dk-side-by-side {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dk-textarea {
+  width: 100%;
+  min-height: 11rem;
+  font: inherit;
+  line-height: 1.55;
+  padding: 0.75rem;
+  border: 1px solid var(--line, #d8ddd6);
+  border-radius: 0.75rem;
+  background: var(--panel, #fff);
+  color: inherit;
+  resize: vertical;
+}
+
+.dk-input {
+  width: 100%;
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line, #d8ddd6);
+  border-radius: 0.75rem;
+  background: var(--panel, #fff);
+  color: inherit;
+}
+
+.dk-card {
+  border: 1px solid var(--line, #d8ddd6);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dk-card-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--brand, #126454);
+}
+
+.dk-citation {
+  font-size: 0.85rem;
+}
+
+.dk-verify {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.92rem;
+}
+
+.dk-verify-ok {
+  background: #e6f4ea;
+  border: 1px solid #9ed3a8;
+}
+
+.dk-verify-warn {
+  background: #fdf0e4;
+  border: 1px solid #f0c48f;
+}
+
+.dk-term-chip {
+  display: inline-block;
+  border: 1px solid var(--line, #d8ddd6);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.82rem;
+  margin: 0 0.35rem 0.35rem 0;
+}
+
+.dk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
