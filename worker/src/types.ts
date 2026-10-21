@@ -1,6 +1,9 @@
 // Shared Worker environment bindings and variables.
-// Secrets (OPENROUTER_API_KEY, CONSENT_SECRET, TURNSTILE_SECRET, RATE_LIMIT_SALT)
-// are never committed: they come from .dev.vars locally or `wrangler secret put`.
+// Secrets (OPENROUTER_API_KEY, CONSENT_SECRET, RATE_LIMIT_SALT) are never
+// committed: they come from .dev.vars locally or `wrangler secret put`.
+// TURNSTILE_SECRET is optional and not used by default: Turnstile is
+// disabled for this product (decision 2026-10-21), and verification only
+// runs if a secret is configured anyway.
 export interface Env {
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;

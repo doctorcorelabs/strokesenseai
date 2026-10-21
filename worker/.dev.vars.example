@@ -2,5 +2,9 @@
 # Fill in real values locally or via `wrangler secret put` for deployed environments.
 OPENROUTER_API_KEY=
 CONSENT_SECRET=
+# TURNSTILE_SECRET is optional and intentionally not used in this project
+# (decision 2026-10-21). Leave it unset: without it the Turnstile check is
+# skipped in every environment. The active controls are consent, rate
+# limiting, and CORS.
 TURNSTILE_SECRET=
 RATE_LIMIT_SALT=

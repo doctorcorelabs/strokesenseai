@@ -6,6 +6,11 @@ All notable changes to StrokeSense AI Lab are recorded in this file. Versions fo
 
 Fixes and hardening from the 15-analyst audit of the Phase 0 build (2026-10-20). No feature behavior changes for end users beyond correctness and safety of what already shipped.
 
+### Changed
+
+- Turnstile is now optional and off by default (product decision, 2026-10-21): when no `TURNSTILE_SECRET` is configured the Worker skips the verification in every environment instead of failing closed; the check activates only when a secret is set. Bot protection rests on server-issued consent tokens, per-feature rate limiting, and CORS origin checks.
+- Added `docs/GO-LIVE.md`: the production deployment runbook (secrets, deploy order, verification probes, rollback).
+
 ### Fixed
 
 - Emergency guard hardening on both the Worker and the client: wider paraphrase coverage (vision loss, numbness phrasing, thunderclap headache, Indonesian symptom wording, "cannot move" reports), with regression tests against the red-team paraphrase bank.

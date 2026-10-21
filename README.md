@@ -37,7 +37,7 @@ See [PLANNING.md](PLANNING.md) for the full specification of every feature, the 
 - **Frontend:** React 19 + TypeScript + Vite single-page app with hash routing, deployed as a static site on Netlify. Camera, pose, face, and OCR processing run locally in the browser whenever possible.
 - **AI gateway:** a separate Cloudflare Worker is the only path to AI providers (OpenRouter for text and vision models, Cloudflare Workers AI for narrow tasks such as transcription). API keys never reach the browser.
 - **Shared contract:** `shared/` holds the feature registry, request/response contracts, and limits used by both the frontend and the Worker.
-- **Safety pipeline in the Worker:** Turnstile verification, server-issued consent tokens, per-feature rate limiting with Durable Objects, strict schema validation, an emergency keyword guard that runs before any model call, PII redaction, and output sanitization.
+- **Safety pipeline in the Worker:** server-issued consent tokens, per-feature rate limiting with Durable Objects, CORS origin checks, strict schema validation, an emergency keyword guard that runs before any model call, PII redaction, and output sanitization. Turnstile bot verification exists in the pipeline but only activates when its secret is configured; it is off by default and currently unused.
 
 ## Run it locally
 
@@ -80,8 +80,9 @@ The files in this repository cannot enforce these steps by themselves; a person 
 
 1. **Branch protection (after the first push).** In the GitHub repository settings, protect the `main` branch and require the three CI status checks - **Frontend**, **Worker**, and **E2E** - to pass before merging. Until this is switched on manually, a red CI run does not block a merge; the workflow file alone enforces nothing.
 2. **`ALLOWED_ORIGINS` must be set before any public deploy.** It ships empty on purpose and fails closed: with an empty value the Worker rejects every API request with 403. Set it to the exact production origin (https, no path, no trailing slash) and never to `*` or a wildcard preview domain.
-3. **`TURNSTILE_SECRET` and `CONSENT_SECRET` must be set as production Worker secrets.** Production fails closed without them: Turnstile verification cannot pass and consent tokens cannot be signed, so live AI stays unreachable until both exist.
-4. **Never deploy the `development` Worker environment to a public URL.** In that environment Turnstile passes without a secret and consent is signed with a development fallback secret, by design for local work only. Public staging needs its own separately provisioned environment with real secrets and low-spend keys.
+3. **Set the required production Worker secrets.** `CONSENT_SECRET` is mandatory: production fails closed without it because consent tokens cannot be signed. `OPENROUTER_API_KEY` is required for live AI answers (without it the model endpoints answer 503, honestly not configured). `TURNSTILE_SECRET` is not used: by product decision (2026-10-21) Turnstile stays off, and without the secret the Worker skips that check in every environment.
+4. **Never deploy the `development` Worker environment to a public URL.** In that environment consent is signed with a development fallback secret, by design for local work only. Public staging needs its own separately provisioned environment with real secrets and low-spend keys.
+5. **Follow the full runbook.** Step-by-step deployment, verification, and rollback: [docs/GO-LIVE.md](docs/GO-LIVE.md).
 
 ## Safety notes
 

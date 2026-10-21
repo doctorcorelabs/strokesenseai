@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CONSENT_NOTICE_VERSION } from '../../shared/contracts.ts';
-import { issueConsentToken, verifyConsentToken } from '../src/auth.ts';
+import { issueConsentToken, verifyConsentToken, verifyTurnstile } from '../src/auth.ts';
 import type { Env } from '../src/types.ts';
 
 // Development environment: no CONSENT_SECRET is configured, so tokens are
@@ -101,4 +101,50 @@ test('token signed with a different secret is rejected', async () => {
 
 test('issuance fails outside development when CONSENT_SECRET is missing', async () => {
   await assert.rejects(issueConsentToken({ ENVIRONMENT: 'production' }, 's', ['chat'], CONSENT_NOTICE_VERSION));
+});
+
+// Turnstile is disabled for this product by decision (2026-10-21): with no
+// TURNSTILE_SECRET configured the check passes in every environment. It
+// only verifies when a secret is configured.
+test('verifyTurnstile passes in production when no secret is configured', async () => {
+  const env: Env = { ENVIRONMENT: 'production' };
+  assert.equal(await verifyTurnstile('', env), true);
+  assert.equal(await verifyTurnstile('any-token', env), true);
+});
+
+test('verifyTurnstile passes in development when no secret is configured', async () => {
+  assert.equal(await verifyTurnstile('', devEnv), true);
+  assert.equal(await verifyTurnstile('any-token', devEnv), true);
+});
+
+test('verifyTurnstile rejects an empty token when a secret is configured', async () => {
+  const env: Env = { ENVIRONMENT: 'production', TURNSTILE_SECRET: 'test-secret' };
+  assert.equal(await verifyTurnstile('', env), false);
+});
+
+test('verifyTurnstile follows the siteverify outcome when a secret is configured', async () => {
+  const env: Env = { ENVIRONMENT: 'production', TURNSTILE_SECRET: 'test-secret' };
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    assert.equal(await verifyTurnstile('token-ok', env), true);
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ success: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    assert.equal(await verifyTurnstile('token-bad', env), false);
+
+    globalThis.fetch = async () => {
+      throw new Error('network unreachable');
+    };
+    assert.equal(await verifyTurnstile('token-x', env), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

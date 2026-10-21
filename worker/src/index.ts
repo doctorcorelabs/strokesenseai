@@ -14,7 +14,7 @@ export { RateLimiter } from './ratelimit.ts';
 
 // Router and middleware chain for the StrokeSense AI Lab API.
 // Order for protected feature endpoints is deliberate:
-//   CORS -> Turnstile -> consent token -> rate limit -> handler
+//   CORS -> Turnstile (only when configured) -> consent token -> rate limit -> handler
 // CORS is a browser boundary only, never an authentication mechanism.
 // Turnstile and consent are skipped for /api/session and /api/consent,
 // which are the endpoints that establish them.

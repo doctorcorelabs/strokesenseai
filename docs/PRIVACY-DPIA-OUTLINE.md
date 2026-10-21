@@ -56,7 +56,8 @@ Under UU PDP, data subjects have rights including information, access, correctio
 ## 6. Security measures (summary)
 
 - API keys exist only as Worker secrets; the browser never holds a provider key.
-- Turnstile verification, per-feature rate limiting, strict schema validation, and PII redaction in the Worker run before any provider call.
+- Consent token verification, per-feature rate limiting with Durable Objects, strict schema validation, and PII redaction in the Worker run before any provider call.
+- Cloudflare Turnstile bot verification was part of the original design and is intentionally not enabled (decision recorded 2026-10-21). The Worker skips the Turnstile check when no Turnstile secret is configured; abuse control relies on consent tokens, rate limiting, and exact-match CORS origin checks.
 - EXIF metadata is stripped from images on the client before any upload.
 - Responses use `Cache-Control: no-store`; error messages never contain provider payloads or user content.
 - E2E tests capture network traffic and must prove that no biometric payload leaves the browser except on the consented paths. See `eval/README.md`.

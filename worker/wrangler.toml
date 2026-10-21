@@ -17,6 +17,14 @@ workers_dev = false
 # Until one option is chosen and both files agree, browsers will block the
 # frontend from reaching this API. This comment is the explicit record of
 # that decision point, not a silent trap.
+# The step-by-step go-live runbook is docs/GO-LIVE.md; treat it as the
+# official procedure and keep this comment in sync with it.
+#
+# Turnstile is intentionally NOT activated in this project (decision
+# 2026-10-21): do not set TURNSTILE_SECRET. Without that secret the
+# Turnstile check is skipped in every environment (see src/auth.ts), which
+# is the intended behaviour here. The active request controls are the
+# consent token, the rate limiter, and CORS origin checks.
 
 [vars]
 ENVIRONMENT = "production"
@@ -69,11 +77,14 @@ new_sqlite_classes = ["RateLimiter"]
 [env.development]
 # workers_dev stays false even here (audit SEC-02): `wrangler dev` for local
 # work does not use this flag and is unaffected. Deploying this environment
-# publicly would publish a Worker where Turnstile passes without a secret
-# and consent is signed with a development fallback secret, protected only
-# by CORS, which is not authentication. Do NOT deploy this environment to a
-# public URL without real secrets; use a separately provisioned preview
-# environment with its own low-spend keys for staging instead.
+# publicly would publish a Worker whose consent tokens are signed with a
+# development fallback secret. Turnstile is intentionally not used in this
+# project (decision 2026-10-21), so nothing about that changes with a
+# Turnstile secret; the active controls are consent, rate limiting, and
+# CORS, and CORS alone is not authentication. Do NOT deploy this
+# environment to a public URL without a real CONSENT_SECRET; use a
+# separately provisioned preview environment with its own low-spend keys
+# for staging instead.
 workers_dev = false
 
 [env.development.vars]

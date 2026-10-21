@@ -30,11 +30,15 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// Verify a Cloudflare Turnstile token server-side. When no secret is
-// configured the check only passes in development; production fails closed.
+// Verify a Cloudflare Turnstile token server-side. Turnstile is disabled
+// for this product by decision (2026-10-21): when no secret is configured
+// the check passes in every environment, including production. The check
+// only runs when a TURNSTILE_SECRET is configured; in that case the
+// verification behavior below is unchanged. The active anti-abuse
+// controls are consent JWTs, rate limiting, and exact-match CORS.
 export async function verifyTurnstile(token: string, env: Env, ip?: string): Promise<boolean> {
   const secret = env.TURNSTILE_SECRET?.trim();
-  if (!secret) return env.ENVIRONMENT === 'development';
+  if (!secret) return true;
   if (!token) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT_MS);
