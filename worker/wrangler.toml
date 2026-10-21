@@ -1,0 +1,88 @@
+name = "strokesenseai-api"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+# Production is reached through the Netlify-facing route/domain only.
+# Enable workers_dev in the dashboard only if a workers.dev URL is ever needed.
+workers_dev = false
+#
+# GO-LIVE DECISION REQUIRED (audit SEC-03): this setting and the CSP in
+# netlify.toml currently contradict each other, and exactly one option must
+# be chosen and recorded here before a production deploy:
+#   Option A (preferred): keep workers_dev = false, put this Worker on a
+#     custom route/domain such as api.<project-domain>, and add that exact
+#     origin to connect-src in netlify.toml.
+#   Option B: enable workers_dev, serve the API from its workers.dev
+#     subdomain, and pin that exact subdomain (not all of *.workers.dev)
+#     in connect-src in netlify.toml.
+# Until one option is chosen and both files agree, browsers will block the
+# frontend from reaching this API. This comment is the explicit record of
+# that decision point, not a silent trap.
+
+[vars]
+ENVIRONMENT = "production"
+# REQUIRED before go-live: exact frontend origin(s), comma separated,
+# no paths and no trailing slashes. Empty intentionally fails closed:
+# every API request is rejected with 403 until this is set.
+# Do not use "*" and do not allow all preview domains.
+ALLOWED_ORIGINS = ""
+# One server-controlled model ID; clients cannot select models.
+OPENROUTER_MODEL = "openai/gpt-4o-mini"
+# Fallback per-IP budget per minute for features without their own limit,
+# and the global aggregate brake. The global bucket now counts AI feature
+# endpoints only (session and consent no longer draw from it, see
+# src/ratelimit.ts), so the brake is raised to 600 per minute: it remains a
+# cost emergency brake, not a per-user fairness limit, and bootstrap
+# traffic can no longer drain or be drained by it (audit SEC-01).
+IP_REQUESTS_PER_MINUTE = "10"
+GLOBAL_REQUESTS_PER_MINUTE = "600"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+# ---------------------------------------------------------------------------
+# OPTIONAL BINDINGS (not yet provisioned, do not invent ids)
+#
+# The handlers for sessions, consent records, and anonymous audit logs expect:
+#   KV namespace  -> binding SESSIONS (session state, 24h TTL)
+#   D1 database   -> binding AUDIT    (consent records, anonymous audit log)
+#
+# Provision them, then uncomment and paste the real ids printed by wrangler:
+#
+#   wrangler kv namespace create SESSIONS
+#   wrangler d1 create strokesenseai-audit
+#
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "<id printed by wrangler kv namespace create>"
+#
+# [[d1_databases]]
+# binding = "AUDIT"
+# database_name = "strokesenseai-audit"
+# database_id = "<id printed by wrangler d1 create>"
+# ---------------------------------------------------------------------------
+
+[env.development]
+# workers_dev stays false even here (audit SEC-02): `wrangler dev` for local
+# work does not use this flag and is unaffected. Deploying this environment
+# publicly would publish a Worker where Turnstile passes without a secret
+# and consent is signed with a development fallback secret, protected only
+# by CORS, which is not authentication. Do NOT deploy this environment to a
+# public URL without real secrets; use a separately provisioned preview
+# environment with its own low-spend keys for staging instead.
+workers_dev = false
+
+[env.development.vars]
+ENVIRONMENT = "development"
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+OPENROUTER_MODEL = "openai/gpt-4o-mini"
+IP_REQUESTS_PER_MINUTE = "10"
+GLOBAL_REQUESTS_PER_MINUTE = "600"
+
+[[env.development.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
