@@ -34,7 +34,7 @@ ENVIRONMENT = "production"
 # Do not use "*" and do not allow all preview domains.
 ALLOWED_ORIGINS = "https://strokesenseai.daivanlabs.com,https://strokesenseai.netlify.app"
 # One server-controlled model ID; clients cannot select models.
-OPENROUTER_MODEL = "openai/gpt-4o-mini"
+OPENROUTER_MODEL = "openai/gpt-6-luna"
 # Fallback per-IP budget per minute for features without their own limit,
 # and the global aggregate brake. The global bucket now counts AI feature
 # endpoints only (session and consent no longer draw from it, see
@@ -90,7 +90,7 @@ workers_dev = false
 [env.development.vars]
 ENVIRONMENT = "development"
 ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
-OPENROUTER_MODEL = "openai/gpt-4o-mini"
+OPENROUTER_MODEL = "openai/gpt-6-luna"
 IP_REQUESTS_PER_MINUTE = "10"
 GLOBAL_REQUESTS_PER_MINUTE = "600"
 

@@ -65,7 +65,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // Calls the configured chat model through OpenRouter and returns the reply
 // text. The model id comes from the environment and is validated; provider
-// routing forbids silent fallback models and data collection.
+// routing forbids silent fallback models and data collection. No temperature
+// is sent: some current models (for example openai/gpt-6-luna) expose no
+// temperature parameter, and require_parameters would then reject every
+// endpoint; the model default is acceptable for explanatory answers.
 export async function callChatModel(
   env: EnvLike,
   messages: ChatMessage[],
@@ -90,7 +93,6 @@ export async function callChatModel(
         model,
         messages,
         max_tokens: opts?.maxTokens ?? DEFAULT_MAX_TOKENS,
-        temperature: 0.2,
         stream: false,
         provider: { allow_fallbacks: false, require_parameters: true, data_collection: 'deny' },
       }),
