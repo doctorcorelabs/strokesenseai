@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development (npm run dev). Never commit the actual file.
+# Fill in real values locally or via `wrangler secret put` for deployed environments.
+OPENROUTER_API_KEY=
+CONSENT_SECRET=
+TURNSTILE_SECRET=
+RATE_LIMIT_SALT=
