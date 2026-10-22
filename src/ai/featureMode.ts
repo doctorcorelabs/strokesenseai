@@ -40,6 +40,23 @@ const KIND_OVERRIDES: Partial<Record<string, FeatureModeKind>> = {
   // The synthetic demo is a sample text; the scanner performs a real
   // deterministic scan of whatever text is pasted, entirely on device.
   'privacy-shield': 'on-device',
+  // R1 rebuild features (registered in R1_FEATURES in shared/registry.ts).
+  // Their models text is written for people first, so the badge each one
+  // should carry is pinned here instead of relying on the text heuristic.
+  // Vision measurement and geometry run locally in the browser; only the
+  // speech stage leaves the device, to the browser provider, and the
+  // registry models text for Speech Lab says so explicitly.
+  'fast-live-check': 'on-device',
+  'face-lab': 'on-device',
+  // The synthetic-demo input kind is the labelled no-camera replay mode;
+  // the primary mode is real camera measurement on the device.
+  'movement-lab': 'on-device',
+  'speech-lab': 'on-device',
+  // The synthetic-demo input kind is a sample document; the parsers run
+  // for real on whatever text the user pastes, entirely on device.
+  'document-studio': 'on-device',
+  // The Worker AI endpoint does this feature's main job.
+  'ask-the-lab': 'ai',
 };
 
 export function featureModeKind(feature: FeatureEntry): FeatureModeKind {

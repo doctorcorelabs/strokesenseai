@@ -1,0 +1,158 @@
+/* Document Studio: layout for the merged document outputs.
+   Visual language follows the shared panels and badges; only the
+   studio-specific pieces (tabs, fact cards, detection row) live here. */
+
+.ds-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.ds-label {
+  display: block;
+  font-weight: 600;
+  margin: 16px 0 6px;
+}
+
+.ds-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cbd5d1;
+  border-radius: 10px;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ds-detect-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.ds-stale {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.ds-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.ds-tab {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #126454;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #126454;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ds-tab-active {
+  background: #126454;
+  color: #ffffff;
+}
+
+.ds-unknown {
+  border-left: 4px solid #b45309;
+  padding: 8px 12px;
+  background: #fffbeb;
+}
+
+.ds-example-source pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f4f6f3;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+.ds-category {
+  margin-top: 18px;
+}
+
+.ds-fact-list,
+.ds-risk-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ds-fact,
+.ds-risk-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.ds-fact-label {
+  font-weight: 700;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 4px;
+}
+
+.ds-fact p,
+.ds-risk-card p {
+  margin: 4px 0;
+}
+
+.badge-verified {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.ds-flag {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.ds-source {
+  color: #475569;
+  font-style: italic;
+  font-size: 0.92rem;
+}
+
+.ds-notes {
+  margin-top: 16px;
+}
+
+.ds-risk-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ds-not-mentioned {
+  margin-top: 14px;
+  color: #475569;
+}
+
+.ds-plain-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.ds-rejected {
+  border-left: 4px solid #b91c1c;
+  background: #fef2f2;
+  padding: 10px 14px;
+}

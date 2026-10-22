@@ -9,6 +9,7 @@ const FEATURE_LIMITS: Record<string, number> = {
   asr: 10,
   'speech-judge': 10,
   chat: 15,
+  ask: 15,
   feature: 10,
   tools: 20,
   session: 30,
@@ -23,7 +24,7 @@ const GLOBAL_DEFAULT_PER_MINUTE = 600;
 // Bootstrap endpoints (session, consent) are cheap, carry their own
 // per-feature budgets, and must not let a flood of consent requests drain
 // the brake that protects AI cost, nor be drained by it (audit SEC-01).
-const AI_FEATURES = new Set(['chat', 'tools', 'vision', 'audio', 'asr', 'speech-judge', 'feature']);
+const AI_FEATURES = new Set(['chat', 'ask', 'tools', 'vision', 'audio', 'asr', 'speech-judge', 'feature']);
 
 // Resolve the salt used to hash client IPs, as a pure function so the chain
 // is testable. Fallback chain, in order:

@@ -1,0 +1,175 @@
+/* LabShell and ResultSheet: the shared frame of the rebuilt labs.
+   Uses the global design tokens from styles.css (palette #126454 and
+   #153e34 on #fafbf8) so the shell matches the existing pages. */
+
+/* ---------- Stepper ---------- */
+
+.lab-stepper {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.lab-stepper-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 0;
+  min-width: 0;
+  color: var(--muted);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+/* Connector segment between steps. */
+.lab-stepper-step + .lab-stepper-step::before {
+  content: "";
+  flex: 0 0 1.2rem;
+  height: 2px;
+  background: var(--line);
+  margin-right: 0.25rem;
+}
+
+.lab-stepper-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.lab-stepper-step.is-done {
+  color: var(--deep);
+}
+
+.lab-stepper-step.is-done .lab-stepper-dot {
+  border-color: var(--green);
+  background: var(--mint);
+  color: var(--green);
+}
+
+.lab-stepper-step.is-active {
+  color: var(--deep);
+}
+
+.lab-stepper-step.is-active .lab-stepper-dot {
+  border-color: var(--green);
+  background: var(--green);
+  color: #ffffff;
+}
+
+.lab-stepper-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 560px) {
+  .lab-stepper {
+    padding: 0.7rem 0.8rem;
+  }
+
+  .lab-stepper-step {
+    font-size: 0.82rem;
+    gap: 0.35rem;
+  }
+
+  .lab-stepper-step + .lab-stepper-step::before {
+    flex-basis: 0.5rem;
+  }
+
+  .lab-stepper-dot {
+    width: 1.45rem;
+    height: 1.45rem;
+    font-size: 0.78rem;
+  }
+}
+
+/* ---------- Stages and actions ---------- */
+
+.lab-shell-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.lab-shell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+/* ---------- ResultSheet ---------- */
+
+.result-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.result-headline {
+  margin: 0;
+}
+
+.result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.result-limit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+}
+
+.result-limit-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+/* Cannot-analyze variant: the three-part failure pattern. */
+
+.result-cannot {
+  border-left: 4px solid var(--red);
+  background: var(--red-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.result-cannot-part h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+  color: var(--deep);
+}
+
+.result-cannot-part p {
+  margin: 0;
+}
+
+.result-cannot-required {
+  margin: 0;
+  font-weight: 600;
+}

@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getFeature } from '../../shared/registry';
+import { getFeature, LEGACY_ALIASES, R1_FEATURES } from '../../shared/registry';
 import type { FeatureEntry } from '../../shared/registry';
 import { LAB_MODULES } from '../../shared/lab';
 import ToolCoach from '../ai/ToolCoach';
@@ -46,8 +46,70 @@ function inputSummary(feature: FeatureEntry): string {
   return feature.inputKinds.join(', ');
 }
 
-export default function LabPage({ id }: { id: string }) {
+/**
+ * Honest end-of-life panel for a retired lab whose alias target is null.
+ * The route stays reachable so old links never dead-end, but the page
+ * says plainly that the experiment was withdrawn and why, instead of
+ * quietly serving a successor it was never merged into.
+ */
+function RetiredLabPanel({ feature }: { feature: FeatureEntry }) {
+  return (
+    <div className="page-stack">
+      <section className="panel">
+        <p className="eyebrow">{feature.group}</p>
+        <h1 className="section-title">{feature.name} has been retired</h1>
+        <p>
+          This experiment is no longer part of the lab. It followed the movement of a mouse
+          pointer or a finger on the screen while its name promised eye and gaze tracking, and
+          a pointer is not a gaze: keeping it live would have kept teaching a measurement the
+          tool never made. It was withdrawn rather than renamed, and it has no successor in
+          the current catalog. A real gaze lab based on iris landmarks may return only if it
+          first passes a published accuracy check on real people.
+        </p>
+        <p className="muted">
+          Nothing was measured or stored by visiting this page. The rebuilt labs measure the
+          face, arms, and hands with on-device landmark models instead.
+        </p>
+        <div className="hero-actions">
+          <a className="btn btn-primary" href="#lab/face-lab">
+            Try Face Lab instead
+          </a>
+          <a className="btn" href="#home">
+            Back to all labs
+          </a>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Resolve a legacy route id through the registry migration map. An alias
+ * whose target is a mounted R1 rebuild feature renders that target under
+ * the old id, so shared and bookmarked links land on the successor. An
+ * alias whose target is an R2 feature that is not built yet keeps
+ * rendering the legacy lab itself: no dead ends, recorded as R2 debt.
+ * A null target means the lab was retired with no successor.
+ */
+function resolveRouteId(id: string): { effectiveId: string; retired: boolean } {
+  if (!Object.prototype.hasOwnProperty.call(LEGACY_ALIASES, id)) {
+    return { effectiveId: id, retired: false };
+  }
+  const target = LEGACY_ALIASES[id];
+  if (target === null) return { effectiveId: id, retired: true };
+  if (target && R1_FEATURES.some((feature) => feature.id === target)) {
+    return { effectiveId: target, retired: false };
+  }
+  return { effectiveId: id, retired: false };
+}
+
+export default function LabPage({ id: routeId }: { id: string }) {
+  const { effectiveId: id, retired } = resolveRouteId(routeId);
   const feature = getFeature(id);
+
+  if (retired && feature) {
+    return <RetiredLabPanel feature={feature} />;
+  }
 
   if (!feature) {
     return (

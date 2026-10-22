@@ -2,7 +2,21 @@
 // README, the Scope page, and the UI are verified against this file in CI.
 // A live route without an entry here, or an entry without a route, fails CI.
 // See PLANNING.md sections 6 and 9.3.
+//
+// Registry v2 (rebuild R1): entries may carry the optional v2 fields
+// (displayName, benefit, inputs, minutes, zone) that the rebuilt hub uses.
+// The R1 feature set lives in R1_FEATURES further down and is kept separate
+// from FEATURES so the legacy catalog and its consistency gates stay intact
+// until the new shell replaces the old one; R1_CATALOG is the combined
+// public catalog for R1. LEGACY_ALIASES maps retired or merged legacy
+// routes to their rebuild targets.
 export type FeatureMaturity = 'concept' | 'lab' | 'validated';
+
+/** Registry v2: what the user has to provide or use for a feature. */
+export type FeatureInput = 'camera' | 'microphone' | 'text' | 'touch' | 'none';
+
+/** Registry v2: hub zone, grouped by what the user does, not by technology. */
+export type FeatureZone = 'check' | 'play' | 'think' | 'review';
 
 export type FeatureGroup =
   | 'Flagship'
@@ -27,6 +41,16 @@ export interface FeatureEntry {
   models: string;
   retention: string;
   evalReport: string;
+  /** Registry v2: plain-language display name used by the rebuilt hub. */
+  displayName?: string;
+  /** Registry v2: one lay benefit sentence, at most 12 words. */
+  benefit?: string;
+  /** Registry v2: what the user needs to provide or use. */
+  inputs?: FeatureInput[];
+  /** Registry v2: estimated minutes to a first result. */
+  minutes?: number;
+  /** Registry v2: hub zone for this feature. */
+  zone?: FeatureZone;
 }
 
 export const FEATURE_GROUPS: FeatureGroup[] = [
@@ -453,6 +477,11 @@ export const FEATURES: FeatureEntry[] = [
       'A curated evidence card library is retrieved locally and the cards are the only facts used. An optional Worker AI explanation may narrate the retrieved cards after consent; weak citation support falls back to the raw cards.',
     retention: 'Nothing is stored',
     evalReport: 'Not evaluated yet',
+    displayName: 'Ask the Guidelines',
+    benefit: 'Ask a question and get an answer with its sources.',
+    inputs: ['text'],
+    minutes: 2,
+    zone: 'think',
   },
   {
     id: 'plain-translator',
@@ -489,6 +518,11 @@ export const FEATURES: FeatureEntry[] = [
       'Runs fixed synthetic cases through the Worker AI endpoint (models configured on the server) and scores the replies with a local deterministic rubric. Results describe behaviour on synthetic cases only.',
     retention: 'Nothing is stored',
     evalReport: 'Not evaluated yet',
+    displayName: 'Model Bench',
+    benefit: 'Watch how AI models answer the same case, side by side.',
+    inputs: ['touch'],
+    minutes: 3,
+    zone: 'review',
   },
   {
     id: 'privacy-shield',
@@ -507,6 +541,11 @@ export const FEATURES: FeatureEntry[] = [
       'Fully local: deterministic personal data pattern scanning and a per-feature data flow inventory rendered in the browser. No AI model, and no data leaves the device.',
     retention: 'Nothing is stored',
     evalReport: 'Not evaluated yet',
+    displayName: 'Privacy Shield',
+    benefit: 'Find and mask personal details before you share any text.',
+    inputs: ['text'],
+    minutes: 1,
+    zone: 'think',
   },
   {
     id: 'adaptive-tutor',
@@ -547,6 +586,214 @@ export const FEATURES: FeatureEntry[] = [
   },
 ];
 
+/**
+ * Registry v2: the R1 rebuild features. These are new entries, not renames
+ * of legacy ones: their copy describes the technology that actually runs
+ * (MediaPipe landmark models and browser speech recognition), and their
+ * legacy predecessors stay in FEATURES until the rebuilt shell takes over.
+ * The migration map between the two sets is LEGACY_ALIASES below.
+ */
+export const R1_FEATURES: FeatureEntry[] = [
+  {
+    id: 'fast-live-check',
+    name: 'FAST Live Check',
+    displayName: 'FAST Live Check',
+    tagline: 'Face, arm, and speech practice that the camera really measures',
+    group: 'Flagship',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Practice the FAST signs while the camera measures what it sees.',
+    inputs: ['camera', 'microphone'],
+    minutes: 3,
+    zone: 'check',
+    summary:
+      'One guided session with three measured stages. The Face stage tracks your face with an on-device landmark model while you smile and raise your brows, and compares how much each side moved from your own resting face. The Arm stage measures each arm angle in the camera picture while you hold both arms raised out to the sides for 10 seconds. The Speech stage transcribes one target sentence with the browser speech recognizer and aligns it word by word. Every stage reports its own data quality, and a stage that cannot be measured says so instead of filling in a value.',
+    limitations:
+      'The output is an observation sheet that describes what was measured, never a score, a verdict, or a diagnosis. The arm position is adapted to the sides because a forward raise cannot be measured honestly from a single 2D camera. Small left-right differences are common, landmark estimates are noisy, and this session cannot rule out stroke.',
+    inputKinds: ['camera', 'microphone'],
+    route: '#lab/fast-live-check',
+    models:
+      'MediaPipe Face Landmarker and Pose Landmarker run locally in the browser on the camera video; no video is uploaded or stored. The speech stage is transcribed by the browser speech recognition service (see Speech Lab for the provider details), and the word alignment is deterministic and computed on the device. No model produces a score or a diagnosis.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+  {
+    id: 'face-lab',
+    name: 'Face Lab',
+    displayName: 'Face Lab',
+    tagline: 'Automatic face landmarks, expression missions, honest comparisons',
+    group: 'Vision AI',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'See how each side of your face moves, side by side.',
+    inputs: ['camera'],
+    minutes: 2,
+    zone: 'check',
+    summary:
+      'Your camera finds your face automatically, so there are no landmarks to place by hand. Short expression missions (smile, brow raise, cheek puff) are tracked live, and the result compares the relative movement of the left and right sides of your face against your own resting baseline. A labelled learning mode places your curves next to a symmetric example and a teaching case.',
+    limitations:
+      'Comparisons describe relative movement in one recording, not symmetry findings. Landmark estimates shift with lighting, distance, and head turns, so small differences are expected and are never labelled normal or abnormal. When the face cannot be tracked well enough, the lab reports cannot analyze.',
+    inputKinds: ['camera'],
+    route: '#lab/face-lab',
+    models:
+      'MediaPipe Face Landmarker runs locally in the browser and estimates 478 facial landmarks and expression blendshapes from the camera video. The left-right movement comparisons are deterministic geometry computed on the device from those landmarks. Video is never uploaded or stored.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+  {
+    id: 'movement-lab',
+    name: 'Movement Lab',
+    displayName: 'Movement Lab',
+    tagline: 'Arm drift and finger taps, measured by your camera',
+    group: 'Motor AI',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Watch your arm angle and finger taps become live charts.',
+    inputs: ['camera'],
+    minutes: 3,
+    zone: 'check',
+    summary:
+      'Two camera-measured movement practices. Arm Raise follows each arm angle in the camera picture while you hold both arms out to the sides for 10 seconds, charting any drift as it happens. Hand Lab counts real thumb-to-index finger taps from the distance between hand landmarks, 10 seconds per hand, and shows your rhythm as a strip for each hand. A clearly labelled simulation mode replays recorded landmark sessions when no camera is available.',
+    limitations:
+      'Angles are 2D projections in the camera picture, not depth, strength, or a clinical measurement. The practice threshold line is a training aid you can move; it is explicitly not a medical cut-off. Limbs that leave the frame cannot be measured, and the lab reports cannot analyze instead of guessing.',
+    inputKinds: ['camera', 'synthetic-demo'],
+    route: '#lab/movement-lab',
+    models:
+      'MediaPipe Pose Landmarker and Hand Landmarker run locally in the browser on the camera video; arm angles and tap counts are deterministic geometry computed on the device from those landmarks. The simulation mode replays recorded landmark data and is labelled as a demo. Video is never uploaded or stored.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+  {
+    id: 'speech-lab',
+    name: 'Speech Lab',
+    displayName: 'Speech Lab',
+    tagline: 'Read one sentence and see exactly what was heard',
+    group: 'Speech and Language AI',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Read a sentence aloud and see every word it heard.',
+    inputs: ['microphone'],
+    minutes: 2,
+    zone: 'check',
+    summary:
+      'You read one target sentence aloud. The browser speech recognizer transcribes it, and a deterministic local alignment marks every target word as heard as written, heard differently (with the word that was actually heard), or not heard. The raw transcript is always shown exactly as received, and a listen-and-compare panel plays your recording next to a human example reading.',
+    limitations:
+      'A mismatch shows what the recognizer heard, not how well you speak: recognizers mishear accents, noise, and quiet voices, and they are known to perform worse on post-stroke speech. There is no speech score. Browsers without speech recognition, such as Firefox, get a clearly labelled typing practice instead; it is never presented as a speech measurement.',
+    inputKinds: ['microphone'],
+    route: '#lab/speech-lab',
+    models:
+      'The browser speech recognition service transcribes your reading, so it is not transcribed purely on this device: in Chrome and Edge the audio is sent to the browser provider (Google or Microsoft) for transcription, and in Safari it is handled by Apple. This site receives only the transcript text. The word-by-word alignment against the target sentence is deterministic and computed locally, and nothing is stored.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+  {
+    id: 'document-studio',
+    name: 'Document Studio',
+    displayName: 'Document Studio',
+    tagline: 'One pasted document, three checklists you can trust',
+    group: 'Document and Data AI',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Turn a discharge paper into checklists you can actually follow.',
+    inputs: ['text'],
+    minutes: 2,
+    zone: 'think',
+    summary:
+      'Paste a discharge summary or a health history into one box. The studio detects which kind of document it is (and lets you switch the guess with one tap), then offers three outputs over the same text: a discharge checklist whose facts point back to their source lines, a risk factor profile where every factor carries a verbatim quote and a status, and a plain-language version whose numbers, doses, dates, and medicine names are locked and verified unchanged. A fictional example document is one tap away.',
+    limitations:
+      'Extraction can be wrong and the original document always wins. There is deliberately no risk score and no conversion of relative dates. There is no photo, PDF, or OCR path: the studio reads pasted text only.',
+    inputKinds: ['text', 'synthetic-demo'],
+    route: '#lab/document-studio',
+    models:
+      'Fully local deterministic parsers on this device: a line-based document parser, a fixed risk factor extractor verified as exact quotes, and a glossary-based plain-language rewrite guarded by a number and name locking check. No AI model and no OCR are involved, and nothing is uploaded.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+  {
+    id: 'ask-the-lab',
+    name: 'Ask the Lab',
+    displayName: 'Ask the Lab',
+    tagline: 'One door for every question about this lab',
+    group: 'Research Platform',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Ask anything about the lab and get a guarded answer.',
+    inputs: ['text'],
+    minutes: 1,
+    zone: 'think',
+    summary:
+      'A single chat door for the whole site, replacing the separate coach on every feature page. Example question chips cover general questions and the feature you just tried. When you come from a lab, a short context note travels with your question, but it only ever contains labels and counts from your session, never your raw text, recordings, or document content.',
+    limitations:
+      'Answers are general education and can be wrong; they are never advice for an individual case. Questions describing current symptoms are routed to the emergency panel instead of being answered as chat.',
+    inputKinds: ['text'],
+    route: '#lab/ask-the-lab',
+    models:
+      'Questions are answered through the Worker AI endpoint (a server-side model configured by the site) after one session consent, behind the same emergency guard, personal data redaction, and per-feature rate limits as the rest of the site. The labs themselves keep their deterministic local cores; this door only explains and answers.',
+    retention: 'Nothing is stored',
+    evalReport: 'Not evaluated yet',
+  },
+];
+
+/**
+ * Feature ids that exist as rebuild targets for R2 but have no registry
+ * entry yet. LEGACY_ALIASES may point at them; they join the catalog when
+ * their phase is built.
+ */
+export const PLANNED_FEATURE_IDS: readonly string[] = [
+  'language-practice',
+  'case-room',
+  'vision-tests',
+  'scope-reviewers',
+];
+
+/** Legacy features that stay in the public catalog for R1, with v2 fields filled. */
+export const R1_RETAINED_IDS: readonly string[] = [
+  'guideline-navigator',
+  'privacy-shield',
+  'model-bench',
+];
+
+/** The combined public catalog for R1: the new features plus the retained ones. */
+export const R1_CATALOG: FeatureEntry[] = [
+  ...R1_FEATURES,
+  ...FEATURES.filter((feature) => R1_RETAINED_IDS.includes(feature.id)),
+];
+
+/**
+ * Migration map from a legacy feature id to its rebuild target, as data
+ * only (no routing logic lives here). A null target means the feature is
+ * retired with no successor. Targets listed in PLANNED_FEATURE_IDS are R2
+ * features that have no registry entry yet.
+ */
+export const LEGACY_ALIASES: Readonly<Record<string, string | null>> = {
+  'digital-fast-multimodal': 'fast-live-check',
+  'face-analyzer': 'face-lab',
+  'face-dynamics': 'face-lab',
+  'gaze-tracker': null,
+  'neglect-explorer': 'vision-tests',
+  'speech-analyzer': 'speech-lab',
+  'aphasia-expression': 'language-practice',
+  'aphasia-communication': 'language-practice',
+  'comprehension-check': 'language-practice',
+  'nihss-language-assistant': 'nihss-trainer',
+  'arm-drift': 'movement-lab',
+  'finger-tapping': 'movement-lab',
+  'balance-lab': 'movement-lab',
+  'fast-vision-check': 'vision-tests',
+  'stroke-code-simulator': 'case-room',
+  'mimic-detective': 'case-room',
+  'localization-challenge': 'case-room',
+  'virtual-patient-osce': 'case-room',
+  'adaptive-tutor': 'case-room',
+  'discharge-lens': 'document-studio',
+  'risk-extractor': 'document-studio',
+  'plain-translator': 'document-studio',
+  'transparency-dashboard': 'scope-reviewers',
+};
+
 export function getFeature(id: string): FeatureEntry | undefined {
-  return FEATURES.find((feature) => feature.id === id);
+  return (
+    FEATURES.find((feature) => feature.id === id) ??
+    R1_FEATURES.find((feature) => feature.id === id)
+  );
 }

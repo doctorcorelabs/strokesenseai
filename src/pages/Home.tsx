@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Camera, Mic, Type, MousePointerClick, Ban, Clock, Stethoscope, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { FEATURES, FEATURE_GROUPS, getFeature } from '../../shared/registry';
-import type { FeatureEntry } from '../../shared/registry';
+import { FEATURES, FEATURE_GROUPS, R1_CATALOG } from '../../shared/registry';
+import type { FeatureEntry, FeatureInput, FeatureZone } from '../../shared/registry';
 import { MaturityBadge, ModeBadge, MODE_LABELS } from '../components/ui';
 import { takePendingGroup } from '../nav-target';
 
@@ -98,14 +98,86 @@ const CLINICIAN_TRAINING_IDS = new Set([
   'virtual-patient-osce',
 ]);
 
-/** Curated first steps, in order. The first entry is the flagship lab. */
-const START_HERE_IDS = [
-  'digital-fast-multimodal',
-  'face-analyzer',
-  'privacy-shield',
-  'mimic-detective',
-  'plain-translator',
-];
+/** Rebuilt hub zones, in the order a first-time visitor meets them. */
+const ZONE_ORDER: FeatureZone[] = ['check', 'play', 'think', 'review'];
+
+const ZONE_LABELS: Record<FeatureZone, string> = {
+  check: 'Check your body',
+  play: 'Play a case',
+  think: 'Understand and ask',
+  review: 'See how the AI works',
+};
+
+const INPUT_ICONS_V2: Record<FeatureInput, LucideIcon> = {
+  camera: Camera,
+  microphone: Mic,
+  text: Type,
+  touch: MousePointerClick,
+  none: Ban,
+};
+
+const INPUT_LABELS_V2: Record<FeatureInput, string> = {
+  camera: 'Camera',
+  microphone: 'Microphone',
+  text: 'Text',
+  touch: 'Screen taps',
+  none: 'No input',
+};
+
+/** Facts row for a rebuilt card, driven by the registry v2 fields. */
+function RebuildFacts({ feature }: { feature: FeatureEntry }) {
+  return (
+    <span className="lab-card-facts">
+      {(feature.inputs ?? []).map((input) => {
+        const InputIcon = INPUT_ICONS_V2[input];
+        return (
+          <span className="fact-chip" key={input}>
+            <InputIcon size={14} aria-hidden="true" />
+            {INPUT_LABELS_V2[input]}
+          </span>
+        );
+      })}
+      {typeof feature.minutes === 'number' && (
+        <span className="fact-chip">
+          <Clock size={14} aria-hidden="true" />
+          About {feature.minutes} min
+        </span>
+      )}
+    </span>
+  );
+}
+
+function RebuildCard({
+  feature,
+  featured = false,
+  apiConfigured,
+}: {
+  feature: FeatureEntry;
+  featured?: boolean;
+  apiConfigured: boolean;
+}) {
+  return (
+    <a
+      className={featured ? 'lab-card lab-card-featured' : 'lab-card'}
+      href={`#lab/${feature.id}`}
+    >
+      {featured && (
+        <span className="fact-chip fact-chip-flagship">
+          <Star size={14} aria-hidden="true" />
+          Flagship
+        </span>
+      )}
+      <strong>{feature.displayName ?? feature.name}</strong>
+      <span className="muted">{feature.benefit ?? feature.tagline}</span>
+      <RebuildFacts feature={feature} />
+      <span className="lab-card-meta">
+        <MaturityBadge maturity={feature.maturity} />
+        <ModeBadge feature={feature} apiConfigured={apiConfigured} />
+        <span aria-hidden="true">Open lab</span>
+      </span>
+    </a>
+  );
+}
 
 function FeatureFacts({ feature }: { feature: FeatureEntry }) {
   const label = inputLabel(feature);
@@ -142,9 +214,13 @@ export default function HomePage() {
     document.getElementById(groupId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const startHere = START_HERE_IDS.map((id) => getFeature(id)).filter(
-    (feature): feature is FeatureEntry => Boolean(feature),
-  );
+  const flagship = R1_CATALOG.find((feature) => feature.id === 'fast-live-check');
+  const rebuildZones = ZONE_ORDER.map((zone) => ({
+    zone,
+    features: R1_CATALOG.filter(
+      (feature) => feature.id !== 'fast-live-check' && feature.zone === zone,
+    ),
+  })).filter((entry) => entry.features.length > 0);
 
   return (
     <div className="page-stack">
@@ -158,7 +234,7 @@ export default function HomePage() {
           or rule out stroke.
         </p>
         <div className="hero-actions">
-          <a className="btn btn-primary" href="#lab/digital-fast-multimodal">
+          <a className="btn btn-primary" href="#lab/fast-live-check">
             Try the flagship lab
           </a>
           <button className="btn" type="button" onClick={scrollToLabs}>
@@ -173,36 +249,29 @@ export default function HomePage() {
           Start here
         </h2>
         <p className="muted">
-          Five labs that show what this playground does, in the order most visitors try them. The
-          full catalog of 28 labs is below.
+          The rebuilt labs come first: a smaller set of experiments, each one measuring what
+          its name says, in three steps (see an example, try it, read your result). Start with
+          the flagship, then pick a zone. The classic catalog of 28 labs is still below.
         </p>
-        <div className="hub-grid start-here-grid">
-          {startHere.map((feature) => {
-            const isFlagship = feature.id === 'digital-fast-multimodal';
-            return (
-              <a
-                className={isFlagship ? 'lab-card lab-card-featured' : 'lab-card'}
-                href={`#lab/${feature.id}`}
-                key={feature.id}
-              >
-                {isFlagship && (
-                  <span className="fact-chip fact-chip-flagship">
-                    <Star size={14} aria-hidden="true" />
-                    Flagship
-                  </span>
-                )}
-                <strong>{feature.name}</strong>
-                <span className="muted">{feature.tagline}</span>
-                <FeatureFacts feature={feature} />
-                <span className="lab-card-meta">
-                  <MaturityBadge maturity={feature.maturity} />
-                  <ModeBadge feature={feature} apiConfigured={apiConfigured} />
-                  <span aria-hidden="true">Open lab</span>
-                </span>
-              </a>
-            );
-          })}
-        </div>
+        {flagship && (
+          <div className="hub-grid start-here-grid">
+            <RebuildCard feature={flagship} featured apiConfigured={apiConfigured} />
+          </div>
+        )}
+        {rebuildZones.map(({ zone, features }) => (
+          <div key={zone}>
+            <p className="eyebrow">{ZONE_LABELS[zone]}</p>
+            <div className="hub-grid">
+              {features.map((feature) => (
+                <RebuildCard
+                  feature={feature}
+                  key={feature.id}
+                  apiConfigured={apiConfigured}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
 
       <aside className="panel" aria-label="AI status">
@@ -215,6 +284,13 @@ export default function HomePage() {
       </aside>
 
       <section id="labs" aria-label="Experiment labs">
+        <p className="eyebrow">Full catalog</p>
+        <h2 className="section-title">All experiments (classic catalog)</h2>
+        <p className="muted">
+          The original 28 labs, in their original groups. Several of them now open their
+          rebuilt successor instead of the old workspace, and one, the Eye and Gaze Tracker,
+          was retired; its page explains why.
+        </p>
         {FEATURE_GROUPS.map((rawGroup) => {
           const group = groupLabel(rawGroup);
           const features = featuresInGroup(group);

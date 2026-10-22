@@ -77,12 +77,26 @@ function saveHistory(records: RunRecord[]): void {
   }
 }
 
-export default function ModelBench() {
+export interface ModelBenchProps {
+  /**
+   * Optional case to preselect on mount, used by the rebuild port so a
+   * curated card click opens the bench on that case. Unknown ids fall
+   * back to the first case, exactly like the default selection.
+   */
+  initialCaseId?: string;
+}
+
+export default function ModelBench({ initialCaseId }: ModelBenchProps = {}) {
   const feature = getFeature('model-bench');
   const cases = useMemo(() => allBenchCases(), []);
   const api = getApiBase();
 
-  const [caseId, setCaseId] = useState<string>(cases[0]?.id ?? '');
+  const [caseId, setCaseId] = useState<string>(() => {
+    if (initialCaseId && cases.some((item) => item.id === initialCaseId)) {
+      return initialCaseId;
+    }
+    return cases[0]?.id ?? '';
+  });
   const [selected, setSelected] = useState<Record<BenchConfigId, boolean>>({
     'coach-context': true,
     'coach-plain': true,

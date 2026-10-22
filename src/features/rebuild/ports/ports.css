@@ -1,0 +1,48 @@
+/* Small shared styles for the rebuild port wrappers. Page layout,
+   panels, and buttons come from the global stylesheet and the shell;
+   feature-specific classes (rp-, dk-, rb-) come from each feature's
+   own stylesheet, loaded by the wrapped component itself. */
+
+.port-example-label {
+  display: inline-block;
+  margin: 0.9rem 0 0.6rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: #e7f2ee;
+  color: #153e34;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.port-card-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.4rem;
+}
+
+.port-card {
+  border: 1px solid #d8e2dc;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: #fff;
+}
+
+.port-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.port-card p {
+  margin: 0.35rem 0;
+}
+
+.port-card-case {
+  font-style: italic;
+}
+
+.port-card-selected {
+  border-color: #126454;
+  box-shadow: 0 0 0 1px #126454;
+}

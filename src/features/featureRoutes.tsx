@@ -78,12 +78,44 @@ export const FULL_PAGE_LABS: Record<string, LabComponent> = {
     import('./document-clinical').then((m) => ({ default: m.RiskExtractor })),
   ),
   'model-bench': lazy(() =>
-    import('./research-bench').then((m) => ({ default: m.ModelBenchPage })),
+    import('./rebuild/ports').then((m) => ({ default: m.ModelBenchPort })),
   ),
   'transparency-dashboard': lazy(() =>
     import('./research-bench').then((m) => ({
       default: m.TransparencyDashboardPage,
     })),
+  ),
+  // R1 rebuild labs. Each one is a self-contained page built on the
+  // shared LabShell (own heading, badges, slim emergency banner, stepper,
+  // and About section), so they belong with the full page labs here even
+  // though their ids are new registry entries, not legacy ones.
+  'fast-live-check': lazy(() =>
+    import('./rebuild/fast-live/FastLiveCheck').then((m) => ({
+      default: m.default,
+    })),
+  ),
+  'face-lab': lazy(() =>
+    import('./rebuild/face-lab').then((m) => ({ default: m.FaceLab })),
+  ),
+  'movement-lab': lazy(() =>
+    import('./rebuild/movement-lab').then((m) => ({ default: m.MovementLab })),
+  ),
+  'speech-lab': lazy(() =>
+    import('./rebuild/speech-lab').then((m) => ({ default: m.default })),
+  ),
+  'document-studio': lazy(() =>
+    import('./rebuild/document-studio').then((m) => ({
+      default: m.DocumentStudio,
+    })),
+  ),
+  'ask-the-lab': lazy(() =>
+    import('./rebuild/ask').then((m) => ({ default: m.AskTheLab })),
+  ),
+  'guideline-navigator': lazy(() =>
+    import('./rebuild/ports').then((m) => ({ default: m.GuidelinePort })),
+  ),
+  'privacy-shield': lazy(() =>
+    import('./rebuild/ports').then((m) => ({ default: m.PrivacyShieldPort })),
   ),
 };
 
@@ -137,18 +169,10 @@ export const WORKSPACE_LABS: Record<string, LabComponent> = {
         m.VirtualPatientOsce,
     })),
   ),
-  'guideline-navigator': lazy(() =>
-    import('./document-knowledge').then((m) => ({
-      default: m.GuidelineNavigator,
-    })),
-  ),
   'plain-translator': lazy(() =>
     import('./document-knowledge').then((m) => ({
       default: m.PlainTranslator,
     })),
-  ),
-  'privacy-shield': lazy(() =>
-    import('./research-platform').then((m) => ({ default: m.PrivacyShield })),
   ),
   'adaptive-tutor': lazy(() =>
     import('./research-platform').then((m) => ({ default: m.AdaptiveTutor })),
@@ -173,9 +197,10 @@ export const SPEECH_APHASIA_IDS: ReadonlySet<string> = new Set([
  * banner appears exactly once. The components keep their own banner; this
  * list only tells the shell to step aside. Verified by grep: these are the
  * only workspace components with an unconditional self-rendered banner.
+ * guideline-navigator left this set in R1 because it is no longer a
+ * workspace lab: its rebuild port is a full page lab (see FULL_PAGE_LABS).
  */
 export const SELF_BANNERED_IDS: ReadonlySet<string> = new Set([
   'nihss-language-assistant',
-  'guideline-navigator',
   'plain-translator',
 ]);

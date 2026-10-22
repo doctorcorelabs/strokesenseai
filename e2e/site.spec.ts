@@ -36,14 +36,30 @@ test('about page shows the intended use statement', async ({ page }) => {
 // cannot-analyze demo panel was removed from the lab shell on purpose.
 // Failure panels now appear only on a real failure, so a freshly opened
 // lab shows its workspace and no failure text.
-test('arm drift lab opens on its workspace with no permanent failure panel', async ({
+//
+// R1 adjustment (2026-10-22, rebuild): #lab/arm-drift is now an alias
+// for Movement Lab inside the rebuilt LabShell, which opens on the
+// example step. The phrase "cannot analyze" legitimately appears once
+// in the DOM, inside the folded "About and help" limitations copy, so
+// the old raw DOM count no longer measures what this test protects.
+// The contract is unchanged: no failure panel is PRESENTED on open.
+// The assertions below pin exactly that: the example step is what the
+// person sees, there is no result sheet at all yet, and the single
+// DOM match for the phrase stays hidden inside the folded section.
+test('arm drift lab opens on its example step with no failure panel shown', async ({
   page,
 }) => {
   await gotoHash(page, '#lab/arm-drift');
   await expect(
-    page.getByRole('button', { name: /start/i }).first(),
+    page.getByRole('heading', { level: 1, name: /Movement Lab/i }),
   ).toBeVisible();
-  await expect(page.getByText(/cannot analyze/i)).toHaveCount(0);
+  await expect(page.getByText(/See finished examples first/i)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /start trying/i }),
+  ).toBeVisible();
+  await expect(page.locator('.result-sheet')).toHaveCount(0);
+  await expect(page.locator('.result-cannot')).toHaveCount(0);
+  await expect(page.getByText(/cannot analyze/i).first()).toBeHidden();
 });
 
 test('FAST check escalates to calling 119 after a yes answer', async ({
@@ -136,8 +152,16 @@ test('offline mode makes no request to any external origin', async ({
     page.getByRole('button', { name: /start/i }).first(),
   ).toBeVisible();
 
-  // The coach now lives inside the collapsed "About and help" section at
-  // the foot of the lab page (P0 reorder); open it before interacting.
+  // R1 adjustment (2026-10-22, rebuild): the rebuilt labs render inside
+  // LabShell, which carries no ToolCoach; the coach now lives on the
+  // legacy lab pages and in Ask the Lab. The offline privacy contract
+  // this test protects is unchanged, so the coach interaction below
+  // runs on #lab/mimic-detective: a legacy workspace lab whose rebuild
+  // target (Case Room) is an R2 feature that is not built yet, so the
+  // route still renders inside the classic lab page, which hosts the
+  // coach inside its collapsed "About and help" section (P0 reorder);
+  // open that section before interacting.
+  await gotoHash(page, '#lab/mimic-detective');
   await page.locator('summary', { hasText: 'About and help' }).click();
 
   // Offline coach interaction: asking a question must be answered from the
