@@ -6,6 +6,16 @@ All notable changes to StrokeSense AI Lab are recorded in this file. Versions fo
 
 Fixes and hardening from the 15-analyst audit of the Phase 0 build (2026-10-20). No feature behavior changes for end users beyond correctness and safety of what already shipped.
 
+### AI upload analysis (2026-10-22)
+
+Product decision (2026-10-22): uploads are analyzed by the site AI service instead of depending only on a live camera, which did not work well on every device. The live on-device measurement paths are unchanged and remain the default wherever they already existed as measurement; the upload path is a separate, clearly labelled source whose results are AI descriptions, not measurements.
+
+- Face Lab, Movement Lab, and the face and arm stages of FAST Live Check now accept an uploaded photo or video as their first, default source. Frames are prepared on the device (a photo as-is, or up to six frames extracted from a video), shown to the person before anything is sent, and sent only when they press the Analyze button after the vision consent. A shared UploadPanel component carries the picker validation and a privacy line each lab must state truthfully for its own path.
+- Document Studio gained a photo mode next to its pasted-text tools: a photographed document is read by the AI service, while the pasted-text path stays fully local with its deterministic parsers. Both results carry a source badge so the two are never confused.
+- The Worker endpoint POST /api/vision gained an image mode next to its metrics mode: seven allowlisted tasks (face-photo, face-video, arm-video, hand-video, fast-face, fast-arm, document-photo), one to six JPEG or PNG data URLs, the same session consent (new 'vision' scope), emergency guard over the note and task context, PII redaction, and per-scope rate limiting as the other AI endpoints. The model answers in one fixed JSON shape (headline, observations, cannotAnalyze, reason) and is instructed to describe only visible signals, never to diagnose, classify, score, or call anything normal or abnormal; a cannotAnalyze answer is rendered as the standard cannot-analyze sheet with the model's reason.
+- Honest labelling was re-aligned for the dual-path features: the catalog mode kind for FAST Live Check, Face Lab, Movement Lab, and Document Studio is now 'mixed' (on-device core plus optional AI upload), their registry models and benefit copy describe both paths including what leaves the device, and every AI upload result sheet is labelled 'Live AI' with a framing line stating the AI describes what it can see and does not measure.
+- E2E coverage for the upload path (e2e/upload-ai.spec.ts) runs against intercepted Worker stubs and proves no vision request leaves before the Analyze press; it runs when the dev server is started with VITE_API_BASE_URL set, which playwright.config.ts now passes through from the shell while keeping the empty default the offline privacy gate depends on.
+
 ### User-facing simplification (P0 package, 2026-10-21)
 
 From the UX audit of the live build (15 analysts, 2026-10-21): the lab experience was simplified without removing any feature or weakening any safety rule.

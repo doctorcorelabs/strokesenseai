@@ -1,11 +1,16 @@
-// Face Lab: automatic face landmarks and three expression missions.
+// Face Lab: automatic face landmarks and three expression missions,
+// plus an AI analysis path for an uploaded photo or video.
 //
 // Step 1 (example) is pure presentation and never mounts this file's
 // camera code, because LabShell only renders tryIt after the person
-// chooses to start. Step 2 runs the shared MediaPipe engine
-// (getLandmarker('face')) on the person's own camera, records a
-// resting baseline, then measures three missions with the pure math
-// in signals.ts. Step 3 is the shared ResultSheet.
+// chooses to start. Step 2 offers two data sources, upload first:
+// the upload path prepares frames on the device and, only after an
+// explicit Analyze press and a vision consent, sends them to the
+// Worker for AI description (visionClient.ts); the camera path runs
+// the shared MediaPipe engine (getLandmarker('face')) on the person's
+// own camera, records a resting baseline, then measures three
+// missions with the pure math in signals.ts. Step 3 is the shared
+// ResultSheet.
 //
 // Honesty rules held here:
 // - Every failure (permission, model load, unstable tracking) ends in
@@ -20,12 +25,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 import { getFeature } from '../../../../shared/registry';
-import { LabShell, ResultSheet } from '../../../shell';
+import { LabShell, ResultSheet, UploadPanel } from '../../../shell';
 import PermissionPrime, {
   permissionFailureFromError,
 } from '../../../components/PermissionPrime';
+import { ConsentNotice, EmergencyBanner } from '../../../components/ui';
+import { EMERGENCY_TEXT } from '../../../safety';
 import { getLandmarker, ModelLoadError } from '../../../ml/engine';
+import { extractVideoFrames, imageFileToDataUrl } from '../../../ml/analyze';
+import { hasSessionConsent } from '../../../ai/client';
+import { analyzeWithAi, type VisionAnalysis } from '../../../ai/visionClient';
 import { featureModeLabel } from '../../../ai/featureMode';
+import { visionTaskForFile } from './uploadTask';
 import {
   computeFaceSignals,
   relativeMovement,
@@ -57,7 +68,20 @@ interface MissionResult {
 type Outcome =
   | { kind: 'measured'; missions: MissionResult[] }
   | { kind: 'guided' }
-  | { kind: 'cannot'; reason: string; suggestion: string };
+  | { kind: 'cannot'; reason: string; suggestion: string }
+  | { kind: 'ai'; analysis: VisionAnalysis }
+  | { kind: 'ai-cannot'; reason: string };
+
+// The framing line that travels with every AI upload result, so the
+// sheet itself never lets a description be mistaken for a measurement.
+const AI_FRAMING_LINE =
+  'AI analysis of your upload. The AI describes what it can see in the image; it does not measure, and it can misread images.';
+
+// The exact privacy line the upload picker shows on the AI path: the
+// on-device default would be untrue here, because frames do leave the
+// device (to the AI service, through the Worker) once analysis runs.
+const AI_PRIVACY_LINE =
+  'Frames from your file are sent to the AI service for analysis. Nothing is stored by this site.';
 
 // Static values used by the example panel and the guided walkthrough.
 // They are product illustration data, always labelled as an example.
@@ -660,11 +684,259 @@ function CameraWorkspace({
   );
 }
 
+type UploadPhase = 'empty' | 'preparing' | 'ready' | 'sending' | 'reading' | 'failed' | 'emergency';
+
+const UPLOAD_STATUS_STEPS = [
+  'Preparing your file',
+  'Sending frames to the AI',
+  'Reading the AI analysis',
+] as const;
+
+/**
+ * The upload path: the default data source. Frames are prepared on
+ * this device (one downscaled image, or up to six frames spread
+ * across a video) and shown to the person before anything is sent.
+ * Sending happens only on an explicit Analyze press, and only after
+ * the vision consent for this session exists or the consent box is
+ * ticked. The AI describes; it never measures, and its result sheet
+ * says so on the sheet itself.
+ */
+function UploadWorkspace({
+  onOutcome,
+  onGuided,
+  onReset,
+}: {
+  onOutcome: (outcome: Outcome | null) => void;
+  onGuided: () => void;
+  onReset: () => void;
+}) {
+  const [phase, setPhase] = useState<UploadPhase>('empty');
+  const [frames, setFrames] = useState<string[]>([]);
+  const [task, setTask] = useState<'face-photo' | 'face-video'>('face-photo');
+  const [failStage, setFailStage] = useState<'prepare' | 'send'>('prepare');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [emergencyText, setEmergencyText] = useState('');
+  const [panelKey, setPanelKey] = useState(0);
+  const [sessionAgreed, setSessionAgreed] = useState(() => hasSessionConsent('vision'));
+  const [consent, setConsent] = useState(false);
+  const [consentPrompt, setConsentPrompt] = useState(false);
+  const prepIdRef = useRef(0);
+
+  const busy = phase === 'preparing' || phase === 'sending' || phase === 'reading';
+  const agreed = sessionAgreed || consent;
+
+  const clearAll = () => {
+    prepIdRef.current += 1;
+    onOutcome(null);
+    setFrames([]);
+    setErrorMessage('');
+    setEmergencyText('');
+    setConsentPrompt(false);
+    setPhase('empty');
+    setPanelKey((value) => value + 1);
+  };
+
+  const prepareFile = async (picked: File) => {
+    const prepId = prepIdRef.current + 1;
+    prepIdRef.current = prepId;
+    onOutcome(null);
+    setErrorMessage('');
+    setEmergencyText('');
+    setConsentPrompt(false);
+    const nextTask = visionTaskForFile(picked);
+    setTask(nextTask);
+    setPhase('preparing');
+    try {
+      if (nextTask === 'face-photo') {
+        const url = await imageFileToDataUrl(picked);
+        if (prepIdRef.current !== prepId) return;
+        setFrames([url]);
+      } else {
+        const extracted = await extractVideoFrames(picked, 6);
+        if (prepIdRef.current !== prepId) return;
+        if (extracted.length === 0) {
+          throw new Error('No frames could be read from that video. Try a different recording.');
+        }
+        setFrames(extracted.map((frame) => frame.dataUrl));
+      }
+      setPhase('ready');
+    } catch (caught) {
+      if (prepIdRef.current !== prepId) return;
+      setFrames([]);
+      setFailStage('prepare');
+      setErrorMessage(
+        caught instanceof Error ? caught.message : 'That file could not be prepared.',
+      );
+      setPhase('failed');
+    }
+  };
+
+  const runAnalysis = async () => {
+    if (!agreed) {
+      // Agreement is a UI act that must come first; analyzeWithAi only
+      // records it. Without it, nothing is prepared for sending and
+      // nothing leaves the device.
+      setConsentPrompt(true);
+      return;
+    }
+    setConsentPrompt(false);
+    setPhase('sending');
+    setErrorMessage('');
+    try {
+      const analysis = await analyzeWithAi({ task, images: frames });
+      setSessionAgreed(hasSessionConsent('vision'));
+      setPhase('reading');
+      // A short beat on the final status step so the person sees the
+      // reading stage before the sheet replaces the workspace state.
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      if (analysis.emergency) {
+        setEmergencyText(analysis.observations[0] ?? EMERGENCY_TEXT);
+        setPhase('emergency');
+        return;
+      }
+      if (analysis.cannotAnalyze) {
+        onOutcome({
+          kind: 'ai-cannot',
+          reason:
+            analysis.reason ??
+            'The AI could not describe this upload clearly enough to say anything useful about it.',
+        });
+      } else {
+        onOutcome({ kind: 'ai', analysis });
+      }
+      setPhase('ready');
+    } catch (caught) {
+      setFailStage('send');
+      setErrorMessage(caught instanceof Error ? caught.message : 'Live AI could not respond.');
+      setPhase('failed');
+    }
+  };
+
+  const statusIndex = phase === 'preparing' ? 0 : phase === 'sending' ? 1 : 2;
+
+  return (
+    <section className="panel">
+      <h2 className="section-title">Upload a photo or video</h2>
+      <p>
+        Choose a photo or a short video of your face. The frames below are prepared on this
+        device and are only sent when you press Analyze, and the AI describes what it can
+        see in them. For a video, the clearest result comes from starting with a relaxed
+        face, then smiling wide, then raising your eyebrows.
+      </p>
+
+      <UploadPanel
+        key={panelKey}
+        accept="both"
+        label="Upload a photo or video of your face"
+        hint="A clear, well-lit photo, or a short video: start relaxed, then smile wide, then raise your eyebrows."
+        privacyLine={AI_PRIVACY_LINE}
+        disabled={busy}
+        onFile={(picked) => void prepareFile(picked)}
+        onClear={clearAll}
+      />
+
+      {busy ? (
+        <ol className="fl-status-list" aria-live="polite">
+          {UPLOAD_STATUS_STEPS.map((label, index) => {
+            const state = index < statusIndex ? 'done' : index === statusIndex ? 'active' : 'todo';
+            return (
+              <li key={label} className={`fl-status-step is-${state}`}>
+                {label}
+                {state === 'active' ? '...' : ''}
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+
+      {phase === 'emergency' ? (
+        <div className="fl-emergency">
+          <EmergencyBanner variant="full" />
+          <p>{emergencyText}</p>
+          <div className="fl-actions">
+            <button type="button" className="btn" onClick={onReset}>
+              Start over
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {phase === 'failed' ? (
+        <div className="fl-failure" role="alert">
+          <h3>The analysis did not finish</h3>
+          <p>{errorMessage}</p>
+          <div className="fl-actions">
+            {failStage === 'send' && frames.length > 0 ? (
+              <button type="button" className="btn btn-primary" onClick={() => void runAnalysis()}>
+                Try again
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={clearAll}>
+                Choose a different file
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {frames.length > 0 && phase !== 'preparing' && phase !== 'failed' && phase !== 'emergency' ? (
+        <>
+          <h3>These frames will be sent to the AI</h3>
+          <div className="fl-frames">
+            {frames.map((url, index) => (
+              <img
+                key={index}
+                className="fl-frame-thumb"
+                src={url}
+                alt={`Frame ${index + 1} prepared from your file`}
+              />
+            ))}
+          </div>
+
+          {sessionAgreed ? (
+            <p className="muted">AI consent given for this session.</p>
+          ) : (
+            <ConsentNotice
+              scopeLabel="the frames from your uploaded file"
+              checked={consent}
+              onChange={(checked) => {
+                setConsent(checked);
+                if (checked) setConsentPrompt(false);
+              }}
+            />
+          )}
+          {consentPrompt && !agreed ? (
+            <p className="muted">
+              One step before the AI sees your frames: tick the agreement box above, then
+              press Analyze with AI again.
+            </p>
+          ) : null}
+
+          <div className="fl-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => void runAnalysis()}
+            >
+              Analyze with AI
+            </button>
+            <button type="button" className="btn" onClick={onGuided}>
+              Use the guided example instead
+            </button>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 export default function FaceLab() {
   const feature = getFeature('face-lab');
   const [guided, setGuided] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
+  const [source, setSource] = useState<'upload' | 'camera'>('upload');
 
   if (!feature) {
     return (
@@ -687,16 +959,83 @@ export default function FaceLab() {
   const tryIt = guided ? (
     <GuidedWalkthrough onFinish={() => setOutcome({ kind: 'guided' })} onReset={reset} />
   ) : (
-    <CameraWorkspace
-      key={sessionKey}
-      onOutcome={setOutcome}
-      onGuided={() => setGuided(true)}
-      onReset={reset}
-    />
+    <>
+      <section className="panel">
+        <h2 className="section-title">Choose how to try it</h2>
+        <div className="fl-source-row" role="group" aria-label="Data source">
+          <button
+            type="button"
+            className={`btn${source === 'upload' ? ' btn-primary' : ''}`}
+            aria-pressed={source === 'upload'}
+            onClick={() => setSource('upload')}
+          >
+            Upload a photo or video
+          </button>
+          <button
+            type="button"
+            className={`btn${source === 'camera' ? ' btn-primary' : ''}`}
+            aria-pressed={source === 'camera'}
+            onClick={() => setSource('camera')}
+          >
+            Use live camera
+          </button>
+        </div>
+        <p className="muted">
+          Upload is the default: frames from your file are described by the AI service. The
+          live camera instead measures movement on this device and sends nothing anywhere.
+        </p>
+      </section>
+      {source === 'upload' ? (
+        <UploadWorkspace
+          key={`upload-${sessionKey}`}
+          onOutcome={setOutcome}
+          onGuided={() => setGuided(true)}
+          onReset={reset}
+        />
+      ) : (
+        <CameraWorkspace
+          key={sessionKey}
+          onOutcome={setOutcome}
+          onGuided={() => setGuided(true)}
+          onReset={reset}
+        />
+      )}
+    </>
   );
 
   let result: ReactNode | undefined;
-  if (outcome?.kind === 'cannot') {
+  if (outcome?.kind === 'ai') {
+    result = (
+      <ResultSheet
+        headline={outcome.analysis.headline}
+        limitLine={AI_FRAMING_LINE}
+        modeLabel="Live AI"
+      >
+        <ul className="fl-ai-observations">
+          {outcome.analysis.observations.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ul>
+        <p className="muted">
+          These sentences are the AI describing the frames you approved. Wording about one
+          side moving more or less is an impression from the images, not a measurement.
+        </p>
+      </ResultSheet>
+    );
+  } else if (outcome?.kind === 'ai-cannot') {
+    result = (
+      <ResultSheet
+        headline="The AI could not describe this upload clearly enough."
+        limitLine={AI_FRAMING_LINE}
+        modeLabel="Live AI"
+        cannotAnalyze={{
+          reason: outcome.reason,
+          suggestion:
+            'Try a clearer, brighter photo that shows the whole face, or a short video that starts with a relaxed face, and analyze again.',
+        }}
+      />
+    );
+  } else if (outcome?.kind === 'cannot') {
     result = (
       <ResultSheet
         headline="The camera could not measure your face movements this time."

@@ -1,0 +1,116 @@
+/* UploadPanel: the shared file picker for the upload-first labs.
+   Uses the global design tokens from styles.css (palette #126454 and
+   #153e34 on #fafbf8) so the panel matches the LabShell frame. */
+
+.upload-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.upload-zone {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 1.4rem 1.2rem;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.upload-zone:hover {
+  border-color: var(--green);
+}
+
+.upload-zone:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+.upload-zone.is-dragging {
+  border-color: var(--green);
+  background: var(--mint);
+}
+
+.upload-zone.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The real input stays in the DOM for the label association and for
+   form semantics, but the zone itself is the visible control. */
+.upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-label {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.08rem;
+  color: var(--deep);
+  cursor: pointer;
+}
+
+.upload-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.upload-drop-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.upload-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.upload-file-name {
+  margin: 0;
+  font-weight: 700;
+  color: var(--deep);
+  overflow-wrap: anywhere;
+}
+
+.upload-file-size {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.upload-error {
+  margin: 0;
+  border-left: 4px solid var(--red);
+  background: var(--red-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.75rem 0.95rem;
+  color: var(--deep);
+  font-size: 0.95rem;
+}
+
+.upload-privacy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}

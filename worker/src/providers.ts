@@ -8,6 +8,26 @@ export interface ChatMessage {
   content: string;
 }
 
+// Multimodal messages for the vision image mode: content is an ordered
+// array of text and image parts in the OpenRouter chat format. Image
+// parts carry data URLs the client produced from an uploaded file.
+export interface TextContentPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ImageContentPart {
+  type: 'image_url';
+  image_url: { url: string };
+}
+
+export type VisionContentPart = TextContentPart | ImageContentPart;
+
+export interface VisionMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | VisionContentPart[];
+}
+
 // Local view of the Worker environment, based on the shared Env type in
 // types.ts (importing the Worker entry point itself would be circular).
 // EnvLike extends Env with the optional Workers AI binding, which is only
@@ -63,16 +83,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// Calls the configured chat model through OpenRouter and returns the reply
-// text. The model id comes from the environment and is validated; provider
-// routing forbids silent fallback models and data collection. No temperature
-// is sent: some current models (for example openai/gpt-6-luna) expose no
-// temperature parameter, and require_parameters would then reject every
-// endpoint; the model default is acceptable for explanatory answers.
-export async function callChatModel(
+// Sends one chat completion request to the configured model through
+// OpenRouter and returns the reply text. The model id comes from the
+// environment and is validated; provider routing forbids silent fallback
+// models and data collection. No temperature is sent: some current
+// models (for example openai/gpt-6-luna) expose no temperature
+// parameter, and require_parameters would then reject every endpoint;
+// the model default is acceptable for explanatory answers.
+async function postChatCompletion(
   env: EnvLike,
-  messages: ChatMessage[],
-  opts?: { maxTokens?: number },
+  messages: ChatMessage[] | VisionMessage[],
+  maxTokens: number,
 ): Promise<string> {
   const key = typeof env.OPENROUTER_API_KEY === 'string' ? env.OPENROUTER_API_KEY.trim() : '';
   const model = typeof env.OPENROUTER_MODEL === 'string' ? env.OPENROUTER_MODEL.trim() : '';
@@ -92,7 +113,7 @@ export async function callChatModel(
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: opts?.maxTokens ?? DEFAULT_MAX_TOKENS,
+        max_tokens: maxTokens,
         stream: false,
         provider: { allow_fallbacks: false, require_parameters: true, data_collection: 'deny' },
       }),
@@ -120,6 +141,29 @@ export async function callChatModel(
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Calls the configured chat model with plain text messages and returns
+// the reply text.
+export async function callChatModel(
+  env: EnvLike,
+  messages: ChatMessage[],
+  opts?: { maxTokens?: number },
+): Promise<string> {
+  return postChatCompletion(env, messages, opts?.maxTokens ?? DEFAULT_MAX_TOKENS);
+}
+
+// Calls the same server-locked model with multimodal messages (text and
+// image parts) for the vision image mode and returns the reply text.
+// The request shape, provider routing, and error codes are identical to
+// the text path; in particular no temperature is sent, for the reason
+// documented on postChatCompletion.
+export async function callVisionModel(
+  env: EnvLike,
+  messages: VisionMessage[],
+  opts?: { maxTokens?: number },
+): Promise<string> {
+  return postChatCompletion(env, messages, opts?.maxTokens ?? DEFAULT_MAX_TOKENS);
 }
 
 // Calls a small instruction model on Cloudflare Workers AI through the AI

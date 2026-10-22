@@ -39,6 +39,11 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: 60000,
-    env: { VITE_API_BASE_URL: '' },
+    // The e2e server defaults to the offline posture (empty API base),
+    // which the privacy gate in site.spec.ts depends on. A shell-set
+    // VITE_API_BASE_URL passes through so the AI upload spec
+    // (e2e/upload-ai.spec.ts) can run against its intercepted Worker
+    // stubs; unset, the value stays empty and nothing changes.
+    env: { VITE_API_BASE_URL: process.env.VITE_API_BASE_URL ?? '' },
   },
 });

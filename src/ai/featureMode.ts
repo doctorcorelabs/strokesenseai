@@ -43,18 +43,28 @@ const KIND_OVERRIDES: Partial<Record<string, FeatureModeKind>> = {
   // R1 rebuild features (registered in R1_FEATURES in shared/registry.ts).
   // Their models text is written for people first, so the badge each one
   // should carry is pinned here instead of relying on the text heuristic.
-  // Vision measurement and geometry run locally in the browser; only the
-  // speech stage leaves the device, to the browser provider, and the
-  // registry models text for Speech Lab says so explicitly.
-  'fast-live-check': 'on-device',
-  'face-lab': 'on-device',
+  // Four of them are dual-path since the AI upload wave (2026-10-22): a
+  // local core (MediaPipe measurement in the browser, or Document
+  // Studio's pasted-text parsers) plus an optional upload path whose
+  // frames or photo are described by the Worker AI endpoint. Calling
+  // them purely "On this device" would hide the AI path, and calling
+  // them "Live AI" would hide the local core, so they pin to 'mixed';
+  // each result sheet still labels its own path exactly (Live AI for an
+  // AI upload result, On this device for a local one).
+  'fast-live-check': 'mixed',
+  'face-lab': 'mixed',
   // The synthetic-demo input kind is the labelled no-camera replay mode;
-  // the primary mode is real camera measurement on the device.
-  'movement-lab': 'on-device',
+  // the camera mode is real measurement on the device and the upload
+  // mode is the optional AI path.
+  'movement-lab': 'mixed',
+  // Speech Lab has no AI upload path; only its speech stage leaves the
+  // device, to the browser provider, and its registry models text says
+  // so explicitly.
   'speech-lab': 'on-device',
   // The synthetic-demo input kind is a sample document; the parsers run
-  // for real on whatever text the user pastes, entirely on device.
-  'document-studio': 'on-device',
+  // for real on whatever text the user pastes, entirely on device, and
+  // the photo mode is the optional AI path.
+  'document-studio': 'mixed',
   // The Worker AI endpoint does this feature's main job.
   'ask-the-lab': 'ai',
 };

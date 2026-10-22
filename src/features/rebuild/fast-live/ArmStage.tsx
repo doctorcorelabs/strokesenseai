@@ -14,12 +14,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NormalizedLandmark, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision';
 import { getLandmarker, ModelLoadError } from '../../../ml/engine';
+import { extractVideoFrames } from '../../../ml/analyze';
+import { analyzeWithAi } from '../../../ai/visionClient';
+import { hasSessionConsent } from '../../../ai/client';
 import PermissionPrime, { PermissionDenied } from '../../../components/PermissionPrime';
+import { ConsentNotice, EmergencyBanner } from '../../../components/ui';
+import { UploadPanel } from '../../../shell';
 import { armProjectedAngle, smoothSeries } from '../movement-lab/angles';
 import { useCameraStream } from './camera';
-import { ArmChart } from './bits';
-import { HOLD_SECONDS, armStageOutcome, describeArmHold } from './session-logic';
-import type { ArmPoint, ArmStageOutcome } from './types';
+import { ArmChart, StageSourcePicker, type StageSource } from './bits';
+import {
+  AI_FRAMING_LINE,
+  AI_UPLOAD_PRIVACY_LINE,
+  HOLD_SECONDS,
+  aiSourceLabel,
+  armStageOutcome,
+  describeArmHold,
+} from './session-logic';
+import type { AiStageOutcome, ArmPoint, ArmStageOutcome } from './types';
 
 type Phase = 'prime' | 'starting' | 'framing' | 'position' | 'hold' | 'card';
 
@@ -100,8 +112,17 @@ export default function ArmStage({
   guided: boolean;
   onFinish: (outcome: ArmStageOutcome) => void;
 }) {
-  const [mode, setMode] = useState<'camera' | 'guided'>(guided ? 'guided' : 'camera');
+  const [source, setSource] = useState<StageSource>(guided ? 'guided' : 'upload');
   const [phase, setPhase] = useState<Phase>('prime');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [aiOutcome, setAiOutcome] = useState<AiStageOutcome | null>(null);
+  const [aiFailure, setAiFailure] = useState<{ reason: string; suggestion: string } | null>(null);
+  const [emergency, setEmergency] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [consentPrompt, setConsentPrompt] = useState(false);
+  const sessionAgreed = hasSessionConsent('vision');
   const [guidance, setGuidance] = useState('Step back until both arms fit in the frame.');
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [liveSamples, setLiveSamples] = useState<HoldSample[]>([]);
@@ -131,7 +152,7 @@ export default function ArmStage({
   }, [phase]);
 
   useEffect(() => {
-    if (guided) setMode('guided');
+    if (guided) setSource('guided');
   }, [guided]);
 
   const stopLoop = useCallback(() => cancelAnimationFrame(rafRef.current), []);
@@ -347,13 +368,103 @@ export default function ArmStage({
     setLiveSamples([]);
     setSecondsLeft(HOLD_SECONDS);
     setGuidedStep(0);
+    setSource(guided ? 'guided' : 'upload');
+    setUploadFile(null);
+    setUploadBusy(false);
+    setUploadError(null);
+    setAiOutcome(null);
+    setAiFailure(null);
     setPhase('prime');
-  }, [camera, stopLoop]);
+  }, [camera, guided, stopLoop]);
+
+  // ---------------------------------------------------------------------
+  // Upload source: frames from an uploaded video go to the AI service
+  // ---------------------------------------------------------------------
+  const handleFile = useCallback((file: File) => {
+    setAiOutcome(null);
+    setAiFailure(null);
+    if (file.type.startsWith('image/')) {
+      // The arm stage is about a hold over time; one still picture has
+      // no hold in it, so it is refused here with the reason, not
+      // silently analyzed as if it were a video.
+      setUploadFile(null);
+      setUploadError(
+        'The arm stage needs a video of the arm hold, not a photo. Please choose a video file instead.',
+      );
+      return;
+    }
+    setUploadError(null);
+    setUploadFile(file);
+  }, []);
+
+  const handleClear = useCallback(() => {
+    setUploadFile(null);
+    setAiOutcome(null);
+    setAiFailure(null);
+    setUploadError(null);
+  }, []);
+
+  const runUploadAnalysis = useCallback(async () => {
+    if (!uploadFile || uploadBusy) return;
+    if (!sessionAgreed && !consent) {
+      setConsentPrompt(true);
+      return;
+    }
+    setConsentPrompt(false);
+    setUploadBusy(true);
+    setUploadError(null);
+    try {
+      const frames = await extractVideoFrames(uploadFile, 6);
+      const result = await analyzeWithAi({
+        task: 'fast-arm',
+        images: frames.map((frame) => frame.dataUrl),
+      });
+      if (result.emergency) {
+        setEmergency(true);
+        return;
+      }
+      if (result.cannotAnalyze) {
+        setAiFailure({
+          reason:
+            result.reason ??
+            'The AI could not see the arms clearly enough in that video to describe the hold.',
+          suggestion:
+            'Try a video where both arms stay in frame for the whole hold, in brighter light, or use the live camera instead.',
+        });
+        return;
+      }
+      setAiOutcome({
+        status: 'ai',
+        source: 'video',
+        headline: result.headline,
+        observations: result.observations,
+      });
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'The AI analysis could not be completed. Please try again.',
+      );
+    } finally {
+      setUploadBusy(false);
+    }
+  }, [uploadFile, uploadBusy, sessionAgreed, consent]);
+
+  // ---------------------------------------------------------------------
+  // Emergency: the AI guard saw acute signs, so the session stops here
+  // ---------------------------------------------------------------------
+  if (emergency) {
+    return (
+      <section className="panel fast-stage" aria-label="Arm stage">
+        <EmergencyBanner variant="full" />
+      </section>
+    );
+  }
 
   // ---------------------------------------------------------------------
   // Guided example mode (no camera)
   // ---------------------------------------------------------------------
-  if (mode === 'guided') {
+  if (source === 'guided') {
     const steps = [
       {
         title: 'Arms out to the sides',
@@ -410,6 +521,134 @@ export default function ArmStage({
   }
 
   // ---------------------------------------------------------------------
+  // Upload mode: the AI vision service describes an uploaded video
+  // ---------------------------------------------------------------------
+  if (source === 'upload') {
+    return (
+      <section className="panel fast-stage" aria-label="Arm stage">
+        <div className="fast-stage-head">
+          <h3 className="section-title">Arm</h3>
+          <button type="button" className="btn btn-ghost" onClick={skip}>
+            Skip this stage
+          </button>
+        </div>
+        <StageSourcePicker source={source} onChange={setSource} disabled={uploadBusy} />
+        <p className="muted">{POSITION_NOTE}</p>
+
+        {aiOutcome ? (
+          <div className="fast-stage-card">
+            <p className="fast-source-label">{aiSourceLabel(aiOutcome.source)}</p>
+            <p className="fast-card-headline">{aiOutcome.headline}</p>
+            <ul className="fast-observations">
+              {aiOutcome.observations.map((observation, index) => (
+                <li key={index}>{observation}</li>
+              ))}
+            </ul>
+            <p className="muted">{AI_FRAMING_LINE}</p>
+            <div className="fast-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => finishStage(aiOutcome)}
+              >
+                Continue to Speech
+              </button>
+              <button type="button" className="btn" onClick={redo}>
+                Redo arm stage
+              </button>
+            </div>
+          </div>
+        ) : aiFailure ? (
+          <div className="fast-stage-card">
+            <p className="fast-card-headline">The AI could not analyze that video.</p>
+            <p>{aiFailure.reason}</p>
+            <p className="muted">{aiFailure.suggestion}</p>
+            <div className="fast-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => finishStage({ status: 'could-not', ...aiFailure })}
+              >
+                Continue to Speech
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setAiFailure(null);
+                  handleClear();
+                }}
+              >
+                Choose a different video
+              </button>
+              <button type="button" className="btn" onClick={redo}>
+                Redo arm stage
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p>
+              Upload a short video of the arm hold: both arms raised out to the sides, palms
+              down, held for about 10 seconds. The AI describes how the arms appear across the
+              video; it does not measure angles.
+            </p>
+            <UploadPanel
+              accept="both"
+              label="Upload a video of the arm hold"
+              hint="Both arms raised and in frame for the whole hold works best."
+              privacyLine={AI_UPLOAD_PRIVACY_LINE}
+              onFile={handleFile}
+              onClear={handleClear}
+              disabled={uploadBusy}
+            />
+            {uploadError ? (
+              <div className="fast-note" role="alert">
+                <p>{uploadError}</p>
+              </div>
+            ) : null}
+            {uploadFile ? (
+              <>
+                {!sessionAgreed ? (
+                  <ConsentNotice
+                    scopeLabel="frames from the video you upload"
+                    checked={consent}
+                    onChange={(checked) => {
+                      setConsent(checked);
+                      if (checked) setConsentPrompt(false);
+                    }}
+                  />
+                ) : null}
+                {consentPrompt && !consent ? (
+                  <p className="muted">
+                    One step before AI analysis: tick the agreement box above so the service may
+                    process the frames from your video, then press Analyze with AI again.
+                  </p>
+                ) : null}
+                <div className="fast-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={uploadBusy}
+                    onClick={() => void runUploadAnalysis()}
+                  >
+                    {uploadBusy ? 'Analyzing...' : 'Analyze with AI'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {uploadBusy ? (
+              <p className="muted" role="status">
+                Preparing the frames and asking the AI to describe them...
+              </p>
+            ) : null}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  // ---------------------------------------------------------------------
   // Camera mode
   // ---------------------------------------------------------------------
   const liveLeft: ArmPoint[] = liveSamples
@@ -431,6 +670,7 @@ export default function ArmStage({
           </button>
         ) : null}
       </div>
+      {phase === 'prime' ? <StageSourcePicker source={source} onChange={setSource} /> : null}
       <p className="muted">{POSITION_NOTE}</p>
 
       {phase !== 'card' ? (
@@ -468,7 +708,7 @@ export default function ArmStage({
               device="camera"
               why="The camera follows points on your body while you hold both arms raised, so the lab can measure each arm angle in the picture."
               onStart={() => void startCamera()}
-              exits={[{ label: 'Use the guided example', onSelect: () => setMode('guided') }]}
+              exits={[{ label: 'Use the guided example', onSelect: () => setSource('guided') }]}
             />
           ) : null}
 
@@ -478,7 +718,7 @@ export default function ArmStage({
               failure={camera.failure}
               onRetry={() => void startCamera()}
               exits={[
-                { label: 'Use the guided example', onSelect: () => setMode('guided') },
+                { label: 'Use the guided example', onSelect: () => setSource('guided') },
                 { label: 'Skip this stage', onSelect: skip },
               ]}
             />
@@ -488,7 +728,7 @@ export default function ArmStage({
             <div className="fast-note" role="alert">
               <p>{modelError}</p>
               <div className="fast-actions">
-                <button type="button" className="btn" onClick={() => setMode('guided')}>
+                <button type="button" className="btn" onClick={() => setSource('guided')}>
                   Use the guided example
                 </button>
                 <button type="button" className="btn" onClick={skip}>

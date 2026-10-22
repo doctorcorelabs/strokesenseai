@@ -50,9 +50,11 @@ function FastExample() {
       <h2 className="section-title">See it first: one guided FAST practice</h2>
       <p>
         This session has three short stages. The camera measures your face and your arms on
-        this device, and the browser recognizer transcribes one sentence. Nothing here
-        produces a total or a verdict: the ending is an observation sheet that describes what
-        was measured.
+        this device, or you can upload a photo or video of the face and arm stages instead:
+        the frames leave this device and the AI service describes what it sees in them, which
+        is a description, not a measurement. The browser recognizer transcribes one sentence.
+        Nothing here produces a total or a verdict: the ending is an observation sheet that
+        describes what was measured or described.
       </p>
 
       <h3>Face</h3>
@@ -110,6 +112,10 @@ function stageStatusText(outcome: FaceStageOutcome | ArmStageOutcome | SpeechSta
   switch (outcome.status) {
     case 'measured':
       return 'Recorded';
+    case 'ai':
+      return outcome.source === 'photo'
+        ? 'AI analysis of your uploaded photo'
+        : 'AI analysis of your uploaded video';
     case 'could-not':
       return 'Could not be measured';
     case 'skipped':

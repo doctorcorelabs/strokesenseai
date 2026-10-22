@@ -155,6 +155,78 @@ describe('getLandmarker', () => {
   });
 });
 
+describe('getImageLandmarker', () => {
+  it('creates the landmarker in IMAGE running mode with the same face options', async () => {
+    const { getImageLandmarker, MODEL_PATHS } = await loadEngine();
+    await getImageLandmarker('face');
+    expect(mockState.createCalls).toHaveLength(1);
+    const options = mockState.createCalls[0].options as unknown as {
+      baseOptions: { modelAssetPath: string; delegate: string };
+      runningMode: string;
+      outputFaceBlendshapes: boolean;
+    };
+    expect(options.baseOptions.modelAssetPath).toBe(MODEL_PATHS.face);
+    expect(options.runningMode).toBe('IMAGE');
+    expect(options.outputFaceBlendshapes).toBe(true);
+  });
+
+  it('returns the same instance for repeated calls with the same kind', async () => {
+    const { getImageLandmarker } = await loadEngine();
+    const first = await getImageLandmarker('pose');
+    const second = await getImageLandmarker('pose');
+    expect(second).toBe(first);
+    expect(mockState.createCalls).toHaveLength(1);
+  });
+
+  it('keeps its own singleton: an IMAGE load does not close the VIDEO instance, and the reverse', async () => {
+    const { getLandmarker, getImageLandmarker } = await loadEngine();
+    const videoFace = (await getLandmarker('face')) as unknown as FakeInstance;
+    const imageFace = (await getImageLandmarker('face')) as unknown as FakeInstance;
+    expect(imageFace).not.toBe(videoFace);
+    expect(videoFace.closed).toBe(false);
+    expect(imageFace.closed).toBe(false);
+    expect(mockState.createCalls.map((call) => call.options.runningMode)).toEqual([
+      'VIDEO',
+      'IMAGE',
+    ]);
+  });
+
+  it('closes the previous image landmarker when a different image kind is loaded', async () => {
+    const { getImageLandmarker } = await loadEngine();
+    const face = (await getImageLandmarker('face')) as unknown as FakeInstance;
+    const hand = (await getImageLandmarker('hand')) as unknown as FakeInstance;
+    expect(face.closed).toBe(true);
+    expect(hand.closed).toBe(false);
+  });
+
+  it('falls back to the CPU delegate when the GPU delegate fails', async () => {
+    mockState.failModes.set('hand', 'gpu');
+    const { getImageLandmarker } = await loadEngine();
+    await getImageLandmarker('hand');
+    const delegates = mockState.createCalls.map(
+      (call) => (call.options.baseOptions as { delegate: string }).delegate,
+    );
+    expect(delegates).toEqual(['GPU', 'CPU']);
+  });
+
+  it('rejects with a ModelLoadError when both delegates fail', async () => {
+    mockState.failModes.set('face', 'always');
+    const { getImageLandmarker, ModelLoadError } = await loadEngine();
+    const error: unknown = await getImageLandmarker('face').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ModelLoadError);
+  });
+
+  it('is also closed by closeAllLandmarkers', async () => {
+    const { getImageLandmarker, closeAllLandmarkers } = await loadEngine();
+    const first = (await getImageLandmarker('face')) as unknown as FakeInstance;
+    closeAllLandmarkers();
+    expect(first.closed).toBe(true);
+    const second = (await getImageLandmarker('face')) as unknown as FakeInstance;
+    expect(second).not.toBe(first);
+    expect(mockState.createCalls).toHaveLength(2);
+  });
+});
+
 describe('closeAllLandmarkers', () => {
   it('closes the active landmarker and lets the next call load a fresh one', async () => {
     const { getLandmarker, closeAllLandmarkers } = await loadEngine();

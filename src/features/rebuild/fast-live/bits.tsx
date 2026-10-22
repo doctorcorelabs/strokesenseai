@@ -1,10 +1,55 @@
 // Small visual building blocks shared by the FAST Live Check stages,
-// the closing observation sheet, and the worked example: the two-side
-// movement bars, the arm angle chart, and the speech word map. Keeping
-// one implementation means the example, the live view, and the result
-// all draw the same picture the same way.
+// the closing observation sheet, and the worked example: the per-stage
+// source picker, the two-side movement bars, the arm angle chart, and
+// the speech word map. Keeping one implementation means the example,
+// the live view, and the result all draw the same picture the same way.
 
 import type { ArmPoint, FastWordEntry } from './types';
+
+// ---------------------------------------------------------------------------
+// Stage source picker
+// ---------------------------------------------------------------------------
+
+/** Where a face or arm stage gets its input. Upload is the default. */
+export type StageSource = 'upload' | 'camera' | 'guided';
+
+const SOURCE_OPTIONS: Array<{ value: StageSource; label: string }> = [
+  { value: 'upload', label: 'Upload a file' },
+  { value: 'camera', label: 'Live camera' },
+  { value: 'guided', label: 'Guided example' },
+];
+
+/**
+ * The source picker every measured stage offers, in the product order:
+ * upload first, then the live camera, then the guided example. Skipping
+ * stays a separate button on the stage, as it always was.
+ */
+export function StageSourcePicker({
+  source,
+  onChange,
+  disabled = false,
+}: {
+  source: StageSource;
+  onChange: (source: StageSource) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="fast-source-picker" role="group" aria-label="Choose how to do this stage">
+      {SOURCE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`btn fast-source-option${source === option.value ? ' is-active' : ''}`}
+          aria-pressed={source === option.value}
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Movement bars (face tasks)

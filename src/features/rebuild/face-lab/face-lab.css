@@ -161,3 +161,75 @@
   gap: 10px;
   margin-top: 12px;
 }
+
+/* Upload path (AI analysis) styles. */
+
+.fl-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.fl-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.fl-frame-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #d9e2de;
+  background: #e3eae7;
+}
+
+.fl-status-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.fl-status-step {
+  font-size: 0.92rem;
+  color: #6b7a74;
+}
+
+.fl-status-step.is-done {
+  color: #126454;
+  font-weight: 600;
+}
+
+.fl-status-step.is-active {
+  color: #153e34;
+  font-weight: 700;
+}
+
+.fl-failure {
+  border: 1px solid #e5c07b;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fdf6e9;
+  margin-top: 12px;
+}
+
+.fl-failure h3 {
+  margin: 0 0 6px;
+  color: #7a4a12;
+}
+
+.fl-emergency {
+  margin-top: 12px;
+}
+
+.fl-ai-observations {
+  margin: 10px 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}

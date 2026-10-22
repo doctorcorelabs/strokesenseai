@@ -1,19 +1,32 @@
-// Document Studio: one paste box, two local parsers, three outputs.
-// This replaces the separate Discharge Lens, Risk Factor Extractor, and
-// Plain-Language Translator pages. Detection only decides which output
-// leads; both extractions are always computed, so a hybrid document
-// never ends in an empty page. There is no consent checkbox and no
-// redaction step here on purpose: nothing is sent anywhere, so there is
-// nothing to consent to and nothing to unlock. The pure parsers from the
-// old document groups are imported and called directly (see detect.ts);
-// the old extract.ts wrappers are deliberately not used because their
-// personal-data guard exists to gate an upload path this studio does
-// not have.
+// Document Studio: a paste-text path checked on this device, and a
+// separate photo path read by the AI service.
+//
+// The paste path replaces the separate Discharge Lens, Risk Factor
+// Extractor, and Plain-Language Translator pages. Detection only
+// decides which output leads; both extractions are always computed,
+// so a hybrid document never ends in an empty page. It has no consent
+// checkbox and no redaction step on purpose: nothing is sent
+// anywhere, so there is nothing to consent to and nothing to unlock.
+// The pure parsers from the old document groups are imported and
+// called directly (see detect.ts); the old extract.ts wrappers are
+// deliberately not used because their personal-data guard exists to
+// gate an upload path the paste tools do not have.
+//
+// The photo path is opt-in and labelled as a different source
+// everywhere it appears. Nothing is sent when a photo is picked; the
+// photo leaves this device only when the person taps the analyze
+// button, and it goes to the AI service through the Worker
+// (analyzeWithAi, task 'document-photo'). Its sheet is labelled Live
+// AI and carries its own framing line, so an AI reading of a photo is
+// never mistaken for the on-device text check above it.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { getFeature } from '../../../../shared/registry';
-import { LabShell, ResultSheet } from '../../../shell';
+import { LabShell, ResultSheet, UploadPanel } from '../../../shell';
+import { EmergencyBanner } from '../../../components/ui';
+import { analyzeWithAi } from '../../../ai/visionClient';
+import { imageFileToDataUrl } from '../../../ml/analyze';
 import { detectDocument, type DetectionResult, type DocumentKind } from './detect';
 import { dischargeCategoryLabel } from '../../document-clinical/discharge-parser';
 import { riskFactorEducation } from '../../document-clinical/risk-parser';
@@ -36,6 +49,10 @@ import './document-studio.css';
 
 const MAX_CHARS = 20000;
 const HONEST_LABEL = 'Checked on this device - no AI, no OCR, nothing uploaded';
+const PHOTO_PRIVACY_LINE =
+  'Your photo is sent to the AI service for analysis. The pasted-text tools on this page stay fully on this device.';
+const AI_FRAMING_LINE =
+  'The AI reads and summarizes what it can see in the photo. Check every item against the original document; the AI can misread handwriting, doses, and names.';
 const CATEGORY_ORDER: DischargeCategory[] = [
   'diagnosis',
   'medication',
@@ -45,6 +62,14 @@ const CATEGORY_ORDER: DischargeCategory[] = [
 ];
 
 type TabId = 'checklist' | 'risk' | 'plain';
+
+type InputMode = 'paste' | 'photo';
+
+type PhotoOutcome =
+  | { kind: 'done'; headline: string; observations: string[] }
+  | { kind: 'cannot'; reason: string }
+  | { kind: 'emergency' }
+  | { kind: 'error'; message: string };
 
 const RISK_STATUS_LABEL: Record<string, string> = {
   present: 'Mentioned',
@@ -258,6 +283,11 @@ export default function DocumentStudio() {
   const [text, setText] = useState('');
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [kindOverride, setKindOverride] = useState<DocumentKind | null>(null);
+  const [inputMode, setInputMode] = useState<InputMode>('paste');
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState<'preparing' | 'analyzing' | null>(null);
+  const [photoOutcome, setPhotoOutcome] = useState<PhotoOutcome | null>(null);
+  const [activeResult, setActiveResult] = useState<InputMode>('paste');
 
   const exampleDetection = useMemo(
     () => detectDocument(DISCHARGE_SAMPLES[0].text),
@@ -271,11 +301,68 @@ export default function DocumentStudio() {
   function runAnalysis(value: string) {
     setAnalysis({ text: value, detection: detectDocument(value) });
     setKindOverride(null);
+    setActiveResult('paste');
   }
 
   function loadSample(sample: DocumentSample) {
     setText(sample.text);
     runAnalysis(sample.text);
+  }
+
+  async function handlePhotoFile(file: File) {
+    setPhotoBusy('preparing');
+    setPhotoOutcome(null);
+    try {
+      const dataUrl = await imageFileToDataUrl(file, 1024);
+      setPhotoDataUrl(dataUrl);
+    } catch {
+      setPhotoDataUrl(null);
+      setPhotoOutcome({
+        kind: 'error',
+        message:
+          'That photo could not be opened on this device. Choose a different photo, for example a JPG or PNG from your gallery.',
+      });
+      setActiveResult('photo');
+    } finally {
+      setPhotoBusy(null);
+    }
+  }
+
+  function clearPhoto() {
+    setPhotoDataUrl(null);
+    setPhotoOutcome(null);
+  }
+
+  async function runPhotoAnalysis() {
+    if (!photoDataUrl || photoBusy !== null) return;
+    setPhotoBusy('analyzing');
+    try {
+      const res = await analyzeWithAi({ task: 'document-photo', images: [photoDataUrl] });
+      if (res.emergency) {
+        setPhotoOutcome({ kind: 'emergency' });
+      } else if (res.cannotAnalyze) {
+        setPhotoOutcome({
+          kind: 'cannot',
+          reason:
+            res.reason ?? 'The AI could not read this photo clearly enough to describe it.',
+        });
+      } else {
+        setPhotoOutcome({
+          kind: 'done',
+          headline: res.headline,
+          observations: res.observations,
+        });
+      }
+    } catch {
+      setPhotoOutcome({
+        kind: 'error',
+        message:
+          'The photo analysis did not finish. The connection may have dropped, or the AI service may be busy right now.',
+      });
+    } finally {
+      setPhotoBusy(null);
+      setActiveResult('photo');
+    }
   }
 
   const samples: DocumentSample[] = [
@@ -305,9 +392,8 @@ export default function DocumentStudio() {
     </section>
   );
 
-  const tryIt = (
-    <section className="panel">
-      <h2 className="section-title">Paste a document</h2>
+  const pasteTools = (
+    <>
       <p>
         Paste a discharge summary or a health history story. The studio reads it on this
         device and shows what it found, line by line.
@@ -374,6 +460,71 @@ export default function DocumentStudio() {
       >
         Check this document
       </button>
+    </>
+  );
+
+  const photoTools = (
+    <>
+      <p>
+        Photograph a discharge summary or a medicine list and let the AI service read the
+        photo. This is a different tool from the text check: the photo leaves this device,
+        and the AI reading can be wrong, so every item still needs checking against the
+        paper original.
+      </p>
+      <p>
+        <span className="badge badge-mode">Source: AI photo analysis</span>
+      </p>
+      <UploadPanel
+        accept="image"
+        label="Upload a photo of the document"
+        hint="A discharge summary or a medicine list, photographed straight on in bright light, with the whole page in frame."
+        privacyLine={PHOTO_PRIVACY_LINE}
+        onFile={(file) => void handlePhotoFile(file)}
+        onClear={clearPhoto}
+        disabled={photoBusy !== null}
+      />
+      {photoBusy === 'preparing' ? (
+        <p className="muted ds-photo-status">Preparing your photo on this device...</p>
+      ) : null}
+      {photoDataUrl && photoBusy !== 'preparing' ? (
+        <p className="muted ds-photo-status">
+          Photo ready. Nothing has been sent yet; sending happens only when you tap the
+          button below.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={!photoDataUrl || photoBusy !== null}
+        onClick={() => void runPhotoAnalysis()}
+      >
+        {photoBusy === 'analyzing' ? 'Analyzing photo...' : 'Analyze photo with AI'}
+      </button>
+    </>
+  );
+
+  const tryIt = (
+    <section className="panel">
+      <h2 className="section-title">Check a document</h2>
+      <div className="ds-tabs" role="group" aria-label="How to add your document">
+        <button
+          type="button"
+          aria-pressed={inputMode === 'paste'}
+          className={inputMode === 'paste' ? 'ds-tab ds-tab-active' : 'ds-tab'}
+          onClick={() => setInputMode('paste')}
+        >
+          Paste text
+        </button>
+        <button
+          type="button"
+          aria-pressed={inputMode === 'photo'}
+          className={inputMode === 'photo' ? 'ds-tab ds-tab-active' : 'ds-tab'}
+          onClick={() => setInputMode('photo')}
+        >
+          Upload a photo
+        </button>
+      </div>
+      {inputMode === 'paste' ? pasteTools : photoTools}
     </section>
   );
 
@@ -384,12 +535,15 @@ export default function DocumentStudio() {
         ? `We found ${analysis?.detection.riskFactorsFound ?? 0} of the 10 fixed risk factors mentioned in this history.`
         : 'We could not tell what kind of text this is, so both checks were run on it anyway.';
 
-  const result = analysis ? (
+  const pasteResult = analysis ? (
     <ResultSheet
       headline={headline}
       limitLine={`${HONEST_LABEL}. Checked with fixed rules; extraction can be wrong and the original document always wins.`}
       modeLabel="On this device"
     >
+      <p>
+        <span className="badge badge-mode">Source: pasted text, checked on this device</span>
+      </p>
       <StudioTabs
         detection={analysis.detection}
         sourceText={analysis.text}
@@ -397,6 +551,72 @@ export default function DocumentStudio() {
       />
     </ResultSheet>
   ) : undefined;
+
+  let photoResult: ReactNode = undefined;
+  if (photoOutcome?.kind === 'done') {
+    photoResult = (
+      <ResultSheet
+        headline={photoOutcome.headline}
+        limitLine={AI_FRAMING_LINE}
+        modeLabel="Live AI"
+      >
+        <h3 className="ds-ai-title">AI analysis of your photo</h3>
+        <p>
+          <span className="badge badge-mode">Source: AI photo analysis</span>
+        </p>
+        {photoOutcome.observations.length > 0 ? (
+          <ul className="ds-ai-list">
+            {photoOutcome.observations.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">The AI returned no readable items for this photo.</p>
+        )}
+      </ResultSheet>
+    );
+  } else if (photoOutcome?.kind === 'cannot') {
+    photoResult = (
+      <ResultSheet
+        headline="The AI could not read this photo"
+        limitLine={AI_FRAMING_LINE}
+        modeLabel="Live AI"
+        cannotAnalyze={{
+          reason: photoOutcome.reason,
+          suggestion:
+            'Try a brighter photo taken straight on with the whole page in frame, or switch to Paste text and let this device check the document instead.',
+        }}
+      />
+    );
+  } else if (photoOutcome?.kind === 'emergency') {
+    photoResult = (
+      <section className="panel">
+        <EmergencyBanner variant="full" />
+      </section>
+    );
+  } else if (photoOutcome?.kind === 'error') {
+    photoResult = (
+      <section className="panel">
+        <h2 className="section-title">The photo analysis did not finish</h2>
+        <p>{photoOutcome.message}</p>
+        {photoDataUrl ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={photoBusy !== null}
+            onClick={() => void runPhotoAnalysis()}
+          >
+            Try again
+          </button>
+        ) : (
+          <p className="muted">Choose another photo above to try again.</p>
+        )}
+      </section>
+    );
+  }
+
+  const result =
+    activeResult === 'photo' && photoResult ? photoResult : pasteResult;
 
   return <LabShell feature={feature} example={example} tryIt={tryIt} result={result} />;
 }

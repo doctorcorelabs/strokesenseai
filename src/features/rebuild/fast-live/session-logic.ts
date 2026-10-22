@@ -9,6 +9,7 @@
 
 import { alignWords } from '../../speech-core/analysis';
 import type {
+  AiStageOutcome,
   ArmPoint,
   ArmSideSummary,
   ArmStageOutcome,
@@ -23,6 +24,41 @@ export const TARGET_SENTENCE = 'The sky is clear and blue today.';
 export const SMILE_SECONDS = 4;
 export const BROW_SECONDS = 3;
 export const HOLD_SECONDS = 10;
+
+// ---------------------------------------------------------------------------
+// AI upload results
+// ---------------------------------------------------------------------------
+
+/**
+ * The framing line that stands on every AI upload result, on the
+ * stage card and on the observation sheet. The words are fixed: an AI
+ * description of an uploaded file is not a measurement, and the sheet
+ * never lets it borrow the language of one.
+ */
+export const AI_FRAMING_LINE =
+  'AI analysis describes what the AI can see; it is not a measurement.';
+
+/** The privacy line for the upload paths whose frames leave the device. */
+export const AI_UPLOAD_PRIVACY_LINE =
+  'Frames from your file are sent to the AI service for analysis. Nothing is stored by this site.';
+
+/** The exact source label for an AI upload result, by file kind. */
+export function aiSourceLabel(source: AiStageOutcome['source']): string {
+  return source === 'photo'
+    ? 'AI analysis of your uploaded photo'
+    : 'AI analysis of your uploaded video';
+}
+
+/** Sheet lines for one AI stage outcome: label, verbatim model words, framing. */
+function aiStageLines(stageLabel: string, outcome: AiStageOutcome): string[] {
+  const lines = [
+    `${stageLabel}: ${aiSourceLabel(outcome.source)}`,
+    `  ${outcome.headline}`,
+    ...outcome.observations.map((observation) => `  - ${observation}`),
+    `  ${AI_FRAMING_LINE}`,
+  ];
+  return lines;
+}
 
 // ---------------------------------------------------------------------------
 // Small numeric helpers
@@ -304,6 +340,10 @@ function faceSection(face: FaceStageOutcome | undefined, lines: string[]): void 
     lines.push(`Face stage: Could not be measured. ${face.reason}`);
     return;
   }
+  if (face.status === 'ai') {
+    lines.push(...aiStageLines('Face stage', face));
+    return;
+  }
   lines.push(...faceTaskLines('Smile task', SMILE_SECONDS, face.smile));
   lines.push(...faceTaskLines('Brow raise task', BROW_SECONDS, face.brow));
   const excluded = [face.smile, face.brow]
@@ -328,6 +368,10 @@ function armSection(arm: ArmStageOutcome | undefined, lines: string[]): void {
   }
   if (arm.status === 'could-not') {
     lines.push(`Arm stage: Could not be measured. ${arm.reason}`);
+    return;
+  }
+  if (arm.status === 'ai') {
+    lines.push(...aiStageLines('Arm stage', arm));
     return;
   }
   lines.push(`Hold duration: ${arm.holdSeconds} seconds (${arm.usableSeconds} usable)`);

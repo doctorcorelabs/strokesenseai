@@ -128,3 +128,29 @@
   font-weight: 800;
   color: var(--deep);
 }
+
+.mlab-frames {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.mlab-frame {
+  margin: 0;
+  text-align: center;
+}
+
+.mlab-frame img {
+  display: block;
+  width: 104px;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #d8e2d8;
+}
+
+.mlab-frame figcaption {
+  font-size: 0.78rem;
+  color: var(--muted, #5b6b5b);
+  margin-top: 0.2rem;
+}

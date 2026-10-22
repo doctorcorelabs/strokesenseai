@@ -5,10 +5,16 @@
 // model files this site hosts itself (see MODELS.md next to this file),
 // and it guarantees three things:
 //
-// - Singleton per kind per session: asking twice for the same kind
-//   returns the same running instance and never loads the model twice.
-// - One landmarker active at a time: loading a new kind closes the one
-//   that was open, so a phone never runs two vision models at once.
+// - Singleton per kind per running mode: asking twice for the same
+//   kind and mode returns the same running instance and never loads
+//   the model twice. The VIDEO session (getLandmarker) serves the live
+//   camera features; the IMAGE session (getImageLandmarker) serves
+//   uploaded-file analysis in analyze.ts. The two sessions are
+//   separate singletons on purpose, so analyzing an uploaded photo
+//   never tears down a camera landmarker, and the reverse.
+// - One landmarker active at a time within a session: loading a new
+//   kind closes the one that was open, so a phone never runs two
+//   vision models for the same input mode at once.
 // - Honest failure: if the WASM fileset or a model cannot load, the
 //   caller gets a ModelLoadError with a plain reason. Nothing here
 //   falls back to fake data, a CDN copy, or a silent retry loop.
@@ -105,25 +111,34 @@ const LANDMARKER_CLASSES: Record<LandmarkerKind, LandmarkerClass> = {
   hand: HandLandmarker as unknown as LandmarkerClass,
 };
 
-function landmarkerOptions(kind: LandmarkerKind, delegate: 'GPU' | 'CPU'): Record<string, unknown> {
+export type RunningMode = 'VIDEO' | 'IMAGE';
+
+function landmarkerOptions(
+  kind: LandmarkerKind,
+  delegate: 'GPU' | 'CPU',
+  runningMode: RunningMode,
+): Record<string, unknown> {
   const baseOptions = { modelAssetPath: MODEL_PATHS[kind], delegate };
   switch (kind) {
     case 'face':
       return {
         baseOptions,
-        runningMode: 'VIDEO',
+        runningMode,
         numFaces: 1,
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: true,
       };
     case 'pose':
-      return { baseOptions, runningMode: 'VIDEO', numPoses: 1 };
+      return { baseOptions, runningMode, numPoses: 1 };
     case 'hand':
-      return { baseOptions, runningMode: 'VIDEO', numHands: 1 };
+      return { baseOptions, runningMode, numHands: 1 };
   }
 }
 
-async function createLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
+async function createLandmarker(
+  kind: LandmarkerKind,
+  runningMode: RunningMode,
+): Promise<AnyLandmarker> {
   if (typeof WebAssembly === 'undefined') {
     throw new ModelLoadError('unsupported');
   }
@@ -135,24 +150,40 @@ async function createLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
   }
   const landmarkerClass = LANDMARKER_CLASSES[kind];
   try {
-    return await landmarkerClass.createFromOptions(wasmFileset, landmarkerOptions(kind, 'GPU'));
+    return await landmarkerClass.createFromOptions(
+      wasmFileset,
+      landmarkerOptions(kind, 'GPU', runningMode),
+    );
   } catch (gpuError) {
     // Plenty of devices advertise WebGL but cannot run the GPU delegate.
     // One automatic retry on CPU is a loading strategy, not a data
     // fallback: the measurement itself is identical either way.
     try {
-      return await landmarkerClass.createFromOptions(wasmFileset, landmarkerOptions(kind, 'CPU'));
+      return await landmarkerClass.createFromOptions(
+        wasmFileset,
+        landmarkerOptions(kind, 'CPU', runningMode),
+      );
     } catch {
       throw new ModelLoadError(classifyError(gpuError), gpuError);
     }
   }
 }
 
-// Session state. `pending` holds the in-flight load per kind so two
-// simultaneous calls share one model download; `active` holds the one
-// resolved landmarker currently allowed to run.
-const pending = new Map<LandmarkerKind, Promise<AnyLandmarker>>();
-let active: { kind: LandmarkerKind; instance: AnyLandmarker } | null = null;
+// Session state, one bucket per running mode. Inside a bucket,
+// `pending` holds the in-flight load per kind so two simultaneous
+// calls share one model download, and `active` holds the one resolved
+// landmarker currently allowed to run in that mode.
+type LandmarkerSession = {
+  pending: Map<LandmarkerKind, Promise<AnyLandmarker>>;
+  active: { kind: LandmarkerKind; instance: AnyLandmarker } | null;
+};
+
+function newSession(): LandmarkerSession {
+  return { pending: new Map(), active: null };
+}
+
+const videoSession = newSession();
+const imageSession = newSession();
 
 function closeQuietly(instance: AnyLandmarker): void {
   try {
@@ -163,21 +194,25 @@ function closeQuietly(instance: AnyLandmarker): void {
   }
 }
 
-function retireOtherKinds(keep: LandmarkerKind): void {
-  if (active !== null && active.kind !== keep) {
-    closeQuietly(active.instance);
-    active = null;
+function retireOtherKinds(session: LandmarkerSession, keep: LandmarkerKind): void {
+  if (session.active !== null && session.active.kind !== keep) {
+    closeQuietly(session.active.instance);
+    session.active = null;
   }
-  for (const [otherKind, load] of [...pending.entries()]) {
+  for (const [otherKind, load] of [...session.pending.entries()]) {
     if (otherKind === keep) {
       continue;
     }
-    pending.delete(otherKind);
+    session.pending.delete(otherKind);
     // A load that finishes after being retired is closed on arrival so
     // it can never become a second running landmarker.
     void load.then(
       (instance) => {
-        if (active === null || active.kind !== otherKind || active.instance !== instance) {
+        if (
+          session.active === null ||
+          session.active.kind !== otherKind ||
+          session.active.instance !== instance
+        ) {
           closeQuietly(instance);
         }
       },
@@ -186,24 +221,24 @@ function retireOtherKinds(keep: LandmarkerKind): void {
   }
 }
 
-export function getLandmarker(kind: 'face'): Promise<FaceLandmarker>;
-export function getLandmarker(kind: 'pose'): Promise<PoseLandmarker>;
-export function getLandmarker(kind: 'hand'): Promise<HandLandmarker>;
-export function getLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker>;
-export function getLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
-  if (active !== null && active.kind === kind) {
-    return Promise.resolve(active.instance);
+function acquire(
+  session: LandmarkerSession,
+  kind: LandmarkerKind,
+  runningMode: RunningMode,
+): Promise<AnyLandmarker> {
+  if (session.active !== null && session.active.kind === kind) {
+    return Promise.resolve(session.active.instance);
   }
-  const existing = pending.get(kind);
+  const existing = session.pending.get(kind);
   if (existing !== undefined) {
     return existing;
   }
-  retireOtherKinds(kind);
-  const load = createLandmarker(kind).then(
+  retireOtherKinds(session, kind);
+  const load = createLandmarker(kind, runningMode).then(
     (instance) => {
-      if (pending.get(kind) === load) {
-        pending.delete(kind);
-        active = { kind, instance };
+      if (session.pending.get(kind) === load) {
+        session.pending.delete(kind);
+        session.active = { kind, instance };
       } else {
         // Retired while loading; retireOtherKinds already arranged the
         // close, so do not also adopt this instance as active.
@@ -211,26 +246,51 @@ export function getLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
       return instance;
     },
     (error: unknown) => {
-      if (pending.get(kind) === load) {
-        pending.delete(kind);
+      if (session.pending.get(kind) === load) {
+        session.pending.delete(kind);
       }
       throw error;
     },
   );
-  pending.set(kind, load);
+  session.pending.set(kind, load);
   return load;
 }
 
-export function closeAllLandmarkers(): void {
-  if (active !== null) {
-    closeQuietly(active.instance);
-    active = null;
+export function getLandmarker(kind: 'face'): Promise<FaceLandmarker>;
+export function getLandmarker(kind: 'pose'): Promise<PoseLandmarker>;
+export function getLandmarker(kind: 'hand'): Promise<HandLandmarker>;
+export function getLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker>;
+export function getLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
+  return acquire(videoSession, kind, 'VIDEO');
+}
+
+// The IMAGE-mode twin of getLandmarker, for analyzing uploaded still
+// images through analyzeImageFile. Same loading behaviour, same GPU
+// then CPU fallback, same ModelLoadError surface, but its own session
+// bucket: it never closes or reuses a VIDEO landmarker.
+export function getImageLandmarker(kind: 'face'): Promise<FaceLandmarker>;
+export function getImageLandmarker(kind: 'pose'): Promise<PoseLandmarker>;
+export function getImageLandmarker(kind: 'hand'): Promise<HandLandmarker>;
+export function getImageLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker>;
+export function getImageLandmarker(kind: LandmarkerKind): Promise<AnyLandmarker> {
+  return acquire(imageSession, kind, 'IMAGE');
+}
+
+function closeSession(session: LandmarkerSession): void {
+  if (session.active !== null) {
+    closeQuietly(session.active.instance);
+    session.active = null;
   }
-  for (const load of pending.values()) {
+  for (const load of session.pending.values()) {
     void load.then(
       (instance) => closeQuietly(instance),
       () => undefined,
     );
   }
-  pending.clear();
+  session.pending.clear();
+}
+
+export function closeAllLandmarkers(): void {
+  closeSession(videoSession);
+  closeSession(imageSession);
 }

@@ -97,10 +97,16 @@ describe('registry v2: R1 features', () => {
     expect(models).toMatch(/not transcribed purely on this device/);
   });
 
-  it('states plainly that Document Studio uses no AI model and no OCR', () => {
+  it('states plainly how Document Studio splits local parsers and the AI photo path', () => {
+    // Since the AI upload wave (2026-10-22) the studio has two paths:
+    // pasted text is parsed locally, and a photo is read by the Worker
+    // AI endpoint. The models copy must name both, and must not claim
+    // the whole feature is AI-free the way the pre-upload copy did.
     const models = getFeature('document-studio')!.models;
-    expect(models).toMatch(/no ai model/i);
-    expect(models).toMatch(/no ocr/i);
+    expect(models).toMatch(/local deterministic parsers/i);
+    expect(models).toMatch(/photo/i);
+    expect(models).toMatch(/worker ai endpoint/i);
+    expect(models).toMatch(/runs no ocr/i);
   });
 });
 
@@ -177,12 +183,15 @@ describe('registry v2: legacy aliases', () => {
 });
 
 describe('registry v2: honest mode kinds for R1 features', () => {
+  // Since the AI upload wave (2026-10-22), four R1 features are
+  // dual-path (local core plus an optional AI upload analysis), so
+  // their honest catalog kind is 'mixed', not 'on-device'.
   const EXPECTED_R1_KINDS: Record<string, FeatureModeKind> = {
-    'fast-live-check': 'on-device',
-    'face-lab': 'on-device',
-    'movement-lab': 'on-device',
+    'fast-live-check': 'mixed',
+    'face-lab': 'mixed',
+    'movement-lab': 'mixed',
     'speech-lab': 'on-device',
-    'document-studio': 'on-device',
+    'document-studio': 'mixed',
     'ask-the-lab': 'ai',
   };
 

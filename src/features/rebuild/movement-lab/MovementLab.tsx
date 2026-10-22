@@ -1,12 +1,20 @@
-// Movement Lab: two camera-measured movement practices in one lab.
+// Movement Lab: two movement practices in one lab, three sources.
 //
-// Arm Raise follows each arm's projected angle (Pose Landmarker) while
-// both arms are held out to the sides for 10 seconds. Hand Lab counts
-// real thumb-to-index taps (Hand Landmarker) for 10 seconds per hand.
-// All measurement runs on this device; video is never uploaded or
-// stored. A labelled demo mode replays synthetic landmark series
-// through the same calculations when no camera is available, and it
-// never presents itself as a measurement.
+// The default source is an upload: the person picks a video they
+// already have, the browser takes a few frames out of it locally, and
+// only those frames go to the AI service, only when the person
+// presses "Analyze with AI" (see upload.tsx). The AI describes what
+// it can see; it does not measure.
+//
+// The second source is the live camera, measured on this device:
+// Arm Raise follows each arm's projected angle (Pose Landmarker)
+// while both arms are held out to the sides for 10 seconds, and Hand
+// Lab counts real thumb-to-index taps (Hand Landmarker) for 10
+// seconds per hand. Camera video is never uploaded or stored.
+//
+// The third source is a labelled demo that replays synthetic landmark
+// series through the same calculations when no camera is available,
+// and it never presents itself as a measurement.
 //
 // The pure math lives in angles.ts and tapping.ts; this file is the
 // camera lifecycle, the live overlays, and the result sheets.
@@ -19,12 +27,14 @@ import type {
 } from '@mediapipe/tasks-vision';
 import { getFeature } from '../../../../shared/registry';
 import { LabShell, ResultSheet } from '../../../shell';
+import { EmergencyBanner } from '../../../components/ui';
 import PermissionPrime, {
   PermissionDenied,
   permissionFailureFromError,
   type PermissionFailure,
 } from '../../../components/PermissionPrime';
 import { getLandmarker, ModelLoadError } from '../../../ml/engine';
+import MovementUploadAnalyze, { AI_FRAMING_LINE } from './upload';
 import { armProjectedAngle, smoothSeries, type ArmSide } from './angles';
 import {
   detectTaps,
@@ -69,7 +79,46 @@ type Outcome =
       durationMs: number;
       hands: Partial<Record<ArmSide, TapDetection>>;
     }
+  | { kind: 'ai'; headline: string; observations: string[] }
+  | { kind: 'emergency' }
   | { kind: 'cannot'; headline: string; reason: string; suggestion: string };
+
+/** The three ways a mode can be fed: an uploaded video analyzed by
+ * the AI (the default), the live camera measured on this device, or
+ * the labelled demo. */
+type DataSource = 'upload' | 'camera' | 'demo';
+
+function SourceTabs({
+  source,
+  onSelect,
+  label,
+}: {
+  source: DataSource;
+  onSelect: (next: DataSource) => void;
+  label: string;
+}) {
+  const options: { id: DataSource; text: string }[] = [
+    { id: 'upload', text: 'Upload a video' },
+    { id: 'camera', text: 'Use the camera' },
+    { id: 'demo', text: 'Watch a demo' },
+  ];
+  return (
+    <div className="mlab-tabs" role="tablist" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="tab"
+          aria-selected={source === option.id}
+          className={`mlab-tab${source === option.id ? ' is-active' : ''}`}
+          onClick={() => onSelect(option.id)}
+        >
+          {option.text}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface ArmSample {
   timeMs: number;
@@ -399,6 +448,7 @@ function ArmRaiseMode({
   onOutcome: (outcome: Outcome) => void;
 }) {
   const [view, setView] = useState<ArmView>(demoOnly ? 'demo' : 'prime');
+  const [source, setSource] = useState<DataSource>(demoOnly ? 'demo' : 'upload');
   const [failure, setFailure] = useState<PermissionFailure | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [practiceLine, setPracticeLine] = useState(75);
@@ -574,11 +624,58 @@ function ArmRaiseMode({
     }, 50);
   }
 
+  function stopDemo(): void {
+    if (demoTimerRef.current !== null) window.clearInterval(demoTimerRef.current);
+    demoTimerRef.current = null;
+    setDemoPlaying(false);
+  }
+
+  function goDemo(): void {
+    setSource('demo');
+    playDemo();
+  }
+
+  function selectSource(next: DataSource): void {
+    if (next === source) return;
+    if (next === 'demo') {
+      goDemo();
+      return;
+    }
+    stopDemo();
+    if (next === 'camera') {
+      setSource('camera');
+      setView('prime');
+    } else {
+      stopCamera();
+      setSource('upload');
+    }
+  }
+
+  const tabs = (
+    <SourceTabs source={source} onSelect={selectSource} label="How to provide the arm hold" />
+  );
+
+  if (source === 'upload') {
+    return (
+      <div>
+        {tabs}
+        <MovementUploadAnalyze
+          task="arm-video"
+          uploadLabel="Upload a video of the arm hold"
+          hint="Record from the front: raise both arms out to the sides and hold for about 10 seconds"
+          fallbackHeadline="The AI described the arm hold in your upload."
+          onOutcome={onOutcome}
+        />
+      </div>
+    );
+  }
+
   if (view === 'demo') {
     const samples = demoSamplesRef.current;
     const shown = samples.slice(0, demoCount);
     return (
       <div>
+        {tabs}
         <span className="mlab-chip is-demo">{DEMO_LABEL}</span>
         <p>
           A recorded example session, played through the same angle calculations as a
@@ -608,12 +705,13 @@ function ArmRaiseMode({
 
   return (
     <div>
+      {tabs}
       {failure !== null ? (
         <PermissionDenied
           device="camera"
           failure={failure}
           onRetry={requestStart}
-          exits={[{ label: 'Watch a demo instead', onSelect: playDemo }]}
+          exits={[{ label: 'Watch a demo instead', onSelect: goDemo }]}
         />
       ) : modelError !== null ? (
         <div role="alert">
@@ -625,7 +723,7 @@ function ArmRaiseMode({
             <button type="button" className="btn btn-primary" onClick={requestStart}>
               Try again
             </button>
-            <button type="button" className="btn" onClick={playDemo}>
+            <button type="button" className="btn" onClick={goDemo}>
               Watch a demo instead
             </button>
           </div>
@@ -787,6 +885,7 @@ function HandLabMode({
   onOutcome: (outcome: Outcome) => void;
 }) {
   const [view, setView] = useState<HandView>(demoOnly ? 'demo' : 'prime');
+  const [source, setSource] = useState<DataSource>(demoOnly ? 'demo' : 'upload');
   const [failure, setFailure] = useState<PermissionFailure | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [chosenHand, setChosenHand] = useState<ArmSide>('left');
@@ -1008,9 +1107,56 @@ function HandLabMode({
     }, 40);
   }
 
+  function stopDemo(): void {
+    if (demoTimerRef.current !== null) window.clearInterval(demoTimerRef.current);
+    demoTimerRef.current = null;
+    setDemoPlaying(false);
+  }
+
+  function goDemo(): void {
+    setSource('demo');
+    playDemo();
+  }
+
+  function selectSource(next: DataSource): void {
+    if (next === source) return;
+    if (next === 'demo') {
+      goDemo();
+      return;
+    }
+    stopDemo();
+    if (next === 'camera') {
+      setSource('camera');
+      setView('prime');
+    } else {
+      stopCamera();
+      setSource('upload');
+    }
+  }
+
+  const tabs = (
+    <SourceTabs source={source} onSelect={selectSource} label="How to provide the hand tapping" />
+  );
+
+  if (source === 'upload') {
+    return (
+      <div>
+        {tabs}
+        <MovementUploadAnalyze
+          task="hand-video"
+          uploadLabel="Upload a video of your hand tapping"
+          hint="Show one hand close to the camera with the palm facing it, and tap your thumb to your index finger again and again so every tap is easy to see."
+          fallbackHeadline="The AI described the hand tapping in your upload."
+          onOutcome={onOutcome}
+        />
+      </div>
+    );
+  }
+
   if (view === 'demo') {
     return (
       <div>
+        {tabs}
         <span className="mlab-chip is-demo">{DEMO_LABEL}</span>
         <p>
           A recorded example session, counted by the same tap detector as a live test.
@@ -1038,12 +1184,13 @@ function HandLabMode({
 
   return (
     <div>
+      {tabs}
       {failure !== null ? (
         <PermissionDenied
           device="camera"
           failure={failure}
           onRetry={requestStart}
-          exits={[{ label: 'Watch a demo instead', onSelect: playDemo }]}
+          exits={[{ label: 'Watch a demo instead', onSelect: goDemo }]}
         />
       ) : modelError !== null ? (
         <div role="alert">
@@ -1055,7 +1202,7 @@ function HandLabMode({
             <button type="button" className="btn btn-primary" onClick={requestStart}>
               Try again
             </button>
-            <button type="button" className="btn" onClick={playDemo}>
+            <button type="button" className="btn" onClick={goDemo}>
               Watch a demo instead
             </button>
           </div>
@@ -1308,6 +1455,23 @@ export default function MovementLab() {
         modeLabel="On this device"
         cannotAnalyze={{ reason: outcome.reason, suggestion: outcome.suggestion }}
       />
+    ) : outcome.kind === 'emergency' ? (
+      <EmergencyBanner variant="full" />
+    ) : outcome.kind === 'ai' ? (
+      <ResultSheet
+        headline={outcome.headline}
+        limitLine={feature.limitations}
+        modeLabel="Live AI"
+      >
+        <p>{AI_FRAMING_LINE}</p>
+        {outcome.observations.length > 0 ? (
+          <ul>
+            {outcome.observations.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
+      </ResultSheet>
     ) : outcome.kind === 'arm' ? (
       <ResultSheet
         headline={outcome.headline}

@@ -5,6 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  AI_FRAMING_LINE,
+  AI_UPLOAD_PRIVACY_LINE,
+  aiSourceLabel,
   armStageOutcome,
   buildObservationSheetText,
   buildWordMap,
@@ -246,6 +249,74 @@ describe('buildObservationSheetText', () => {
     expect(text).toContain('Face stage: Not recorded.');
     expect(text).toContain('Arm stage: Watched the guided example (not measured).');
     expect(text).toContain('Speech stage: Not recorded.');
+  });
+
+  it('keeps the AI framing and privacy lines word for word', () => {
+    expect(AI_FRAMING_LINE).toBe(
+      'AI analysis describes what the AI can see; it is not a measurement.',
+    );
+    expect(AI_UPLOAD_PRIVACY_LINE).toBe(
+      'Frames from your file are sent to the AI service for analysis. Nothing is stored by this site.',
+    );
+    expect(aiSourceLabel('photo')).toBe('AI analysis of your uploaded photo');
+    expect(aiSourceLabel('video')).toBe('AI analysis of your uploaded video');
+  });
+
+  it('renders AI upload stages with their source labels, model words, and framing', () => {
+    const session: FastSession = {
+      face: {
+        status: 'ai',
+        source: 'photo',
+        headline: 'One mouth corner sits lower than the other in this photo.',
+        observations: [
+          'The left mouth corner appears higher than the right.',
+          'Both eyebrows appear level in this single photo.',
+        ],
+      },
+      arm: {
+        status: 'ai',
+        source: 'video',
+        headline: 'The right arm appears lower in the later frames.',
+        observations: ['The left arm stays at about the same height across the frames.'],
+      },
+      speech: { status: 'skipped' },
+    };
+    const text = buildObservationSheetText(session, when);
+    expect(text).toContain('Face stage: AI analysis of your uploaded photo');
+    expect(text).toContain('One mouth corner sits lower than the other in this photo.');
+    expect(text).toContain('- The left mouth corner appears higher than the right.');
+    expect(text).toContain('Arm stage: AI analysis of your uploaded video');
+    expect(text).toContain('The right arm appears lower in the later frames.');
+    // The framing line stands under both AI sections.
+    expect(text.split(AI_FRAMING_LINE)).toHaveLength(3);
+    expect(text).toContain('Speech stage: Not recorded.');
+    // AI stages never borrow measurement language on the sheet.
+    expect(text).not.toContain('Left side movement (relative)');
+    expect(text).not.toContain('Hold duration:');
+  });
+
+  it('writes an AI could-not stage as Could not be measured with the model reason', () => {
+    const session: FastSession = {
+      face: {
+        status: 'could-not',
+        reason: 'The AI could not see a face clearly enough in that file to describe it.',
+        suggestion: 'Try a clearer, well-lit photo or video.',
+      },
+      arm: {
+        status: 'could-not',
+        reason: 'The AI could not see the arms clearly enough in that video to describe the hold.',
+        suggestion: 'Try a video where both arms stay in frame.',
+      },
+      speech: { status: 'skipped' },
+    };
+    const text = buildObservationSheetText(session, when);
+    expect(text).toContain(
+      'Face stage: Could not be measured. The AI could not see a face clearly enough',
+    );
+    expect(text).toContain(
+      'Arm stage: Could not be measured. The AI could not see the arms clearly enough',
+    );
+    expect(text).not.toContain('AI analysis of your uploaded');
   });
 
   it('writes could-not stages with their reasons, and typed speech honestly', () => {

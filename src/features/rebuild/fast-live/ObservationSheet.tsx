@@ -11,9 +11,11 @@
 
 import { ArmChart, MovementBars, WordMapView } from './bits';
 import {
+  AI_FRAMING_LINE,
   BROW_SECONDS,
   SMILE_SECONDS,
   TARGET_SENTENCE,
+  aiSourceLabel,
   buildObservationSheetText,
   describeArmHold,
   describeFaceTask,
@@ -52,6 +54,19 @@ export default function ObservationSheet({ session }: { session: FastSession }) 
         <p>Face stage: Watched the guided example (not measured).</p>
       ) : face.status === 'could-not' ? (
         <p>Face stage: Could not be measured. {face.reason}</p>
+      ) : face.status === 'ai' ? (
+        <>
+          <p>{aiSourceLabel(face.source)}</p>
+          <p>
+            <strong>{face.headline}</strong>
+          </p>
+          <ul className="fast-observations">
+            {face.observations.map((observation, index) => (
+              <li key={index}>{observation}</li>
+            ))}
+          </ul>
+          <p className="muted">{AI_FRAMING_LINE}</p>
+        </>
       ) : (
         <>
           <h4>Smile task ({SMILE_SECONDS} seconds)</h4>
@@ -94,6 +109,19 @@ export default function ObservationSheet({ session }: { session: FastSession }) 
         <p>Arm stage: Watched the guided example (not measured).</p>
       ) : arm.status === 'could-not' ? (
         <p>Arm stage: Could not be measured. {arm.reason}</p>
+      ) : arm.status === 'ai' ? (
+        <>
+          <p>{aiSourceLabel(arm.source)}</p>
+          <p>
+            <strong>{arm.headline}</strong>
+          </p>
+          <ul className="fast-observations">
+            {arm.observations.map((observation, index) => (
+              <li key={index}>{observation}</li>
+            ))}
+          </ul>
+          <p className="muted">{AI_FRAMING_LINE}</p>
+        </>
       ) : (
         <>
           <ArmChart

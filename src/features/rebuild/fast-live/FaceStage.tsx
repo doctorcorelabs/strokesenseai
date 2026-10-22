@@ -17,13 +17,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 import { getLandmarker, ModelLoadError } from '../../../ml/engine';
+import { extractVideoFrames, imageFileToDataUrl } from '../../../ml/analyze';
+import { analyzeWithAi } from '../../../ai/visionClient';
+import { hasSessionConsent } from '../../../ai/client';
 import PermissionPrime, { PermissionDenied } from '../../../components/PermissionPrime';
+import { ConsentNotice, EmergencyBanner } from '../../../components/ui';
+import { UploadPanel } from '../../../shell';
 import { computeBrowMovement, computeSmileMovement, relativeMovement } from '../face-lab/signals';
 import { useCameraStream } from './camera';
-import { MovementBars } from './bits';
+import { MovementBars, StageSourcePicker, type StageSource } from './bits';
 import {
+  AI_FRAMING_LINE,
+  AI_UPLOAD_PRIVACY_LINE,
   BROW_SECONDS,
   SMILE_SECONDS,
+  aiSourceLabel,
   describeFaceTask,
   faceTaskOutcome,
   headPoseFromMatrix,
@@ -31,7 +39,7 @@ import {
   poseWithinTolerance,
   type FaceWindowSample,
 } from './session-logic';
-import type { FaceStageOutcome, FaceTaskOutcome } from './types';
+import type { AiStageOutcome, FaceStageOutcome, FaceTaskOutcome } from './types';
 
 type Phase =
   | 'prime'
@@ -102,8 +110,17 @@ export default function FaceStage({
   guided: boolean;
   onFinish: (outcome: FaceStageOutcome) => void;
 }) {
-  const [mode, setMode] = useState<'camera' | 'guided'>(guided ? 'guided' : 'camera');
+  const [source, setSource] = useState<StageSource>(guided ? 'guided' : 'upload');
   const [phase, setPhase] = useState<Phase>('prime');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [aiOutcome, setAiOutcome] = useState<AiStageOutcome | null>(null);
+  const [aiFailure, setAiFailure] = useState<{ reason: string; suggestion: string } | null>(null);
+  const [emergency, setEmergency] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [consentPrompt, setConsentPrompt] = useState(false);
+  const sessionAgreed = hasSessionConsent('vision');
   const [lamp, setLamp] = useState('Looking for your face');
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [liveBars, setLiveBars] = useState<{ left: number; right: number } | null>(null);
@@ -130,7 +147,7 @@ export default function FaceStage({
   }, [phase]);
 
   useEffect(() => {
-    if (guided) setMode('guided');
+    if (guided) setSource('guided');
   }, [guided]);
 
   const stopLoop = useCallback(() => {
@@ -380,17 +397,97 @@ export default function FaceStage({
     setLiveBars(null);
     setSecondsLeft(null);
     setGuidedStep(0);
+    setSource(guided ? 'guided' : 'upload');
+    setUploadFile(null);
+    setUploadBusy(false);
+    setUploadError(null);
+    setAiOutcome(null);
+    setAiFailure(null);
     setPhase('prime');
-  }, [camera, stopLoop]);
+  }, [camera, guided, stopLoop]);
 
   const skip = useCallback(() => {
     finishStage({ status: 'skipped' });
   }, [finishStage]);
 
   // ---------------------------------------------------------------------
+  // Upload source: frames from the file go to the AI vision service
+  // ---------------------------------------------------------------------
+  const handleFile = useCallback((file: File) => {
+    setUploadFile(file);
+    setAiOutcome(null);
+    setAiFailure(null);
+    setUploadError(null);
+  }, []);
+
+  const handleClear = useCallback(() => {
+    setUploadFile(null);
+    setAiOutcome(null);
+    setAiFailure(null);
+    setUploadError(null);
+  }, []);
+
+  const runUploadAnalysis = useCallback(async () => {
+    if (!uploadFile || uploadBusy) return;
+    if (!sessionAgreed && !consent) {
+      setConsentPrompt(true);
+      return;
+    }
+    setConsentPrompt(false);
+    setUploadBusy(true);
+    setUploadError(null);
+    try {
+      const isVideo = uploadFile.type.startsWith('video/');
+      const images = isVideo
+        ? (await extractVideoFrames(uploadFile, 6)).map((frame) => frame.dataUrl)
+        : [await imageFileToDataUrl(uploadFile)];
+      const result = await analyzeWithAi({ task: 'fast-face', images });
+      if (result.emergency) {
+        setEmergency(true);
+        return;
+      }
+      if (result.cannotAnalyze) {
+        setAiFailure({
+          reason:
+            result.reason ??
+            'The AI could not see a face clearly enough in that file to describe it.',
+          suggestion:
+            'Try a clearer, well-lit photo or video with the whole face in frame, or use the live camera instead.',
+        });
+        return;
+      }
+      setAiOutcome({
+        status: 'ai',
+        source: isVideo ? 'video' : 'photo',
+        headline: result.headline,
+        observations: result.observations,
+      });
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'The AI analysis could not be completed. Please try again.',
+      );
+    } finally {
+      setUploadBusy(false);
+    }
+  }, [uploadFile, uploadBusy, sessionAgreed, consent]);
+
+  // ---------------------------------------------------------------------
+  // Emergency: the AI guard saw acute signs, so the session stops here
+  // ---------------------------------------------------------------------
+  if (emergency) {
+    return (
+      <section className="panel fast-stage" aria-label="Face stage">
+        <EmergencyBanner variant="full" />
+      </section>
+    );
+  }
+
+  // ---------------------------------------------------------------------
   // Guided example mode (no camera)
   // ---------------------------------------------------------------------
-  if (mode === 'guided') {
+  if (source === 'guided') {
     const steps = [
       {
         title: 'Resting face',
@@ -447,6 +544,134 @@ export default function FaceStage({
   }
 
   // ---------------------------------------------------------------------
+  // Upload mode: the AI vision service describes the file
+  // ---------------------------------------------------------------------
+  if (source === 'upload') {
+    return (
+      <section className="panel fast-stage" aria-label="Face stage">
+        <div className="fast-stage-head">
+          <h3 className="section-title">Face</h3>
+          <button type="button" className="btn btn-ghost" onClick={skip}>
+            Skip this stage
+          </button>
+        </div>
+        <StageSourcePicker source={source} onChange={setSource} disabled={uploadBusy} />
+
+        {aiOutcome ? (
+          <div className="fast-stage-card">
+            <p className="fast-source-label">{aiSourceLabel(aiOutcome.source)}</p>
+            <p className="fast-card-headline">{aiOutcome.headline}</p>
+            <ul className="fast-observations">
+              {aiOutcome.observations.map((observation, index) => (
+                <li key={index}>{observation}</li>
+              ))}
+            </ul>
+            <p className="muted">{AI_FRAMING_LINE}</p>
+            <div className="fast-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => finishStage(aiOutcome)}
+              >
+                Continue to Arm
+              </button>
+              <button type="button" className="btn" onClick={redo}>
+                Redo face stage
+              </button>
+            </div>
+          </div>
+        ) : aiFailure ? (
+          <div className="fast-stage-card">
+            <p className="fast-card-headline">The AI could not analyze that file.</p>
+            <p>{aiFailure.reason}</p>
+            <p className="muted">{aiFailure.suggestion}</p>
+            <div className="fast-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => finishStage({ status: 'could-not', ...aiFailure })}
+              >
+                Continue to Arm
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setAiFailure(null);
+                  handleClear();
+                }}
+              >
+                Choose a different file
+              </button>
+              <button type="button" className="btn" onClick={redo}>
+                Redo face stage
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p>
+              Upload a photo of one face, or a short video of the face movements. For a video,
+              start with a relaxed face, then smile as wide as you can, then raise your eyebrows
+              as high as you can. The AI describes what it can see in the file; it does not
+              measure your face.
+            </p>
+            <UploadPanel
+              accept="both"
+              label="Upload a face photo or video"
+              hint="One face, facing the camera, in good light works best."
+              privacyLine={AI_UPLOAD_PRIVACY_LINE}
+              onFile={handleFile}
+              onClear={handleClear}
+              disabled={uploadBusy}
+            />
+            {uploadFile ? (
+              <>
+                {!sessionAgreed ? (
+                  <ConsentNotice
+                    scopeLabel="frames from the photo or video you upload"
+                    checked={consent}
+                    onChange={(checked) => {
+                      setConsent(checked);
+                      if (checked) setConsentPrompt(false);
+                    }}
+                  />
+                ) : null}
+                {consentPrompt && !consent ? (
+                  <p className="muted">
+                    One step before AI analysis: tick the agreement box above so the service may
+                    process the frames from your file, then press Analyze with AI again.
+                  </p>
+                ) : null}
+                <div className="fast-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={uploadBusy}
+                    onClick={() => void runUploadAnalysis()}
+                  >
+                    {uploadBusy ? 'Analyzing...' : 'Analyze with AI'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {uploadBusy ? (
+              <p className="muted" role="status">
+                Preparing the frames and asking the AI to describe them...
+              </p>
+            ) : null}
+            {uploadError ? (
+              <div className="fast-note" role="alert">
+                <p>{uploadError}</p>
+              </div>
+            ) : null}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  // ---------------------------------------------------------------------
   // Camera mode
   // ---------------------------------------------------------------------
   const instruction =
@@ -470,6 +695,7 @@ export default function FaceStage({
           </button>
         ) : null}
       </div>
+      {phase === 'prime' ? <StageSourcePicker source={source} onChange={setSource} /> : null}
 
       {phase !== 'card' ? (
         <>
@@ -498,7 +724,7 @@ export default function FaceStage({
               why="The camera follows points on your face while you smile and raise your brows, so the lab can compare how much each side moved."
               onStart={() => void startCamera()}
               exits={[
-                { label: 'Use the guided example', onSelect: () => setMode('guided') },
+                { label: 'Use the guided example', onSelect: () => setSource('guided') },
               ]}
             />
           ) : null}
@@ -509,7 +735,7 @@ export default function FaceStage({
               failure={camera.failure}
               onRetry={() => void startCamera()}
               exits={[
-                { label: 'Use the guided example', onSelect: () => setMode('guided') },
+                { label: 'Use the guided example', onSelect: () => setSource('guided') },
                 { label: 'Skip this stage', onSelect: skip },
               ]}
             />
@@ -519,7 +745,7 @@ export default function FaceStage({
             <div className="fast-note" role="alert">
               <p>{modelError}</p>
               <div className="fast-actions">
-                <button type="button" className="btn" onClick={() => setMode('guided')}>
+                <button type="button" className="btn" onClick={() => setSource('guided')}>
                   Use the guided example
                 </button>
                 <button type="button" className="btn" onClick={skip}>
