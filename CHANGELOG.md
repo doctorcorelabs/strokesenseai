@@ -6,6 +6,14 @@ All notable changes to StrokeSense AI Lab are recorded in this file. Versions fo
 
 Fixes and hardening from the 15-analyst audit of the Phase 0 build (2026-10-20). No feature behavior changes for end users beyond correctness and safety of what already shipped.
 
+### Single photo uploads (2026-10-22)
+
+#### Fixed
+
+- A single uploaded photo is now accepted and analyzed in FAST Live Check and Movement Lab instead of being rejected for not being a video or a frame sequence. The FAST Face stage sends a photo to the single-photo `face-photo` task (a video still goes to the frame-sequence task), the FAST Arm stage accepts a photo next to a video, and the Movement Lab upload panels take a photo as well as a video for both the arm and the hand modes, sending the one image to the same stage task.
+- The Worker vision prompt no longer rejects a single image over frame count: the shared instruction dropped "not enough frames to compare" as a cannotAnalyze reason, an explicit rule now states that one attached image is assessed on its visible static signs (position, symmetry, posture) with an added observation that anything requiring movement or comparison over time cannot be judged from a still image, and the focus text of the `fast-face`, `fast-arm`, `face-video`, `arm-video`, and `hand-video` tasks branches between one image and several frames.
+- Honesty notes for still photos stand on the results: the FAST result cards and the final observation sheet, and the Movement Lab result sheet, state per stage that the input was one still photo, so movement, arm drift over time, position change over time, or the tapping rhythm could not be judged and only the signs visible in that single moment were described. A cannotAnalyze answer is still possible, but only when the photo itself cannot be read (subject not visible, too unclear), never merely because it is one photo.
+
 ### Face Lesion Localizer (2026-10-22)
 
 #### Added

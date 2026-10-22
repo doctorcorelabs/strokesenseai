@@ -38,6 +38,8 @@ const PNG_BUFFER = Buffer.from(
 
 const FACE_HEADLINE = 'The AI describes a face that starts relaxed and then smiles.';
 const FACE_OBSERVATION = 'In the later frames, both mouth corners rise.';
+const ARM_HEADLINE = 'Both arms are raised out to the sides, the right a little lower.';
+const ARM_OBSERVATION = 'The left arm sits higher than the right arm.';
 const DOCUMENT_HEADLINE = 'The photo shows a discharge summary page.';
 const DOCUMENT_OBSERVATION = 'A follow-up appointment date is listed on the page.';
 const LOCALIZER_HEADLINE =
@@ -69,6 +71,17 @@ function watchFatalErrors(page: Page): string[] {
 
 interface ApiCounters {
   vision: number;
+  /** The vision task name of each intercepted request, in order. */
+  tasks: string[];
+}
+
+function recordTask(counters: ApiCounters, postData: string | null) {
+  try {
+    const body = JSON.parse(postData ?? '') as { task?: unknown };
+    if (typeof body.task === 'string') counters.tasks.push(body.task);
+  } catch {
+    // A body that does not parse is still answered by the stub below.
+  }
 }
 
 /**
@@ -77,10 +90,11 @@ interface ApiCounters {
  * returns a session id, consent returns a token, and vision returns
  * the analysis as a JSON string in `reply` with mode 'live-ai'. The
  * vision counter lets tests prove nothing was sent before the person
- * pressed Analyze.
+ * pressed Analyze, and the recorded task names pin which task each
+ * file kind was sent to.
  */
 async function stubWorker(page: Page, headline: string, observation: string) {
-  const counters: ApiCounters = { vision: 0 };
+  const counters: ApiCounters = { vision: 0, tasks: [] };
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       status: 200,
@@ -97,6 +111,7 @@ async function stubWorker(page: Page, headline: string, observation: string) {
   });
   await page.route('**/api/vision', async (route) => {
     counters.vision += 1;
+    recordTask(counters, route.request().postData());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -122,7 +137,7 @@ async function stubWorker(page: Page, headline: string, observation: string) {
  * validates them.
  */
 async function stubLocalizerWorker(page: Page) {
-  const counters: ApiCounters = { vision: 0 };
+  const counters: ApiCounters = { vision: 0, tasks: [] };
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       status: 200,
@@ -323,6 +338,134 @@ test.describe('AI upload path', () => {
     // never a diagnosis.
     await expect(sheet.getByText(/possibility exploration/i)).toBeVisible();
     await expect(sheet.getByText(/not a diagnosis/i).first()).toBeVisible();
+    await expect(counters.vision).toBe(1);
+    expect(fatal).toEqual([]);
+  });
+
+  test('fast live face stage accepts one photo and renders the AI result with the photo note', async ({
+    page,
+  }) => {
+    const fatal = watchFatalErrors(page);
+    const counters = await stubWorker(page, FACE_HEADLINE, FACE_OBSERVATION);
+
+    await gotoHash(page, '#lab/fast-live-check');
+    await expect(
+      page.getByRole('heading', { level: 1, name: /FAST Live Check/i }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /start trying/i }).click();
+
+    // The face stage is first and upload is its default source.
+    const faceStage = page.locator('section[aria-label="Face stage"]');
+    await expect(faceStage.getByText('Upload a face photo or video')).toBeVisible();
+
+    await faceStage.locator('.upload-panel input[type="file"]').setInputFiles({
+      name: 'face.png',
+      mimeType: 'image/png',
+      buffer: PNG_BUFFER,
+    });
+    await expect(counters.vision).toBe(0);
+
+    await page.locator('.consent-box input[type="checkbox"]').check();
+    await faceStage.getByRole('button', { name: 'Analyze with AI' }).click();
+
+    // One photo is enough: the result card renders as a success, not
+    // as the cannot-analyze card, and the still-photo note stands on
+    // it saying movement was not judged.
+    await expect(faceStage.getByText('AI analysis of your uploaded photo')).toBeVisible();
+    await expect(faceStage.getByText(FACE_HEADLINE)).toBeVisible();
+    await expect(faceStage.getByText('The AI could not analyze that file.')).toHaveCount(0);
+    await expect(
+      faceStage.getByText(/one still photo, so movement could not be judged/),
+    ).toBeVisible();
+    // The photo went to the single-photo task, not the sequence task.
+    expect(counters.tasks).toEqual(['face-photo']);
+    await expect(counters.vision).toBe(1);
+    expect(fatal).toEqual([]);
+  });
+
+  test('fast live arm stage accepts one photo and renders the AI result with the photo note', async ({
+    page,
+  }) => {
+    const fatal = watchFatalErrors(page);
+    const counters = await stubWorker(page, ARM_HEADLINE, ARM_OBSERVATION);
+
+    await gotoHash(page, '#lab/fast-live-check');
+    await expect(
+      page.getByRole('heading', { level: 1, name: /FAST Live Check/i }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /start trying/i }).click();
+
+    // Skip the face stage to land on the arm stage.
+    const faceStage = page.locator('section[aria-label="Face stage"]');
+    await faceStage.getByRole('button', { name: 'Skip this stage' }).click();
+
+    const armStage = page.locator('section[aria-label="Arm stage"]');
+    await expect(armStage.getByText('Upload a photo or video of the arm hold')).toBeVisible();
+
+    await armStage.locator('.upload-panel input[type="file"]').setInputFiles({
+      name: 'arms.png',
+      mimeType: 'image/png',
+      buffer: PNG_BUFFER,
+    });
+    await expect(counters.vision).toBe(0);
+
+    await page.locator('.consent-box input[type="checkbox"]').check();
+    await armStage.getByRole('button', { name: 'Analyze with AI' }).click();
+
+    // The photo is accepted and described; the note says drift over
+    // time could not be judged from one still moment.
+    await expect(armStage.getByText('AI analysis of your uploaded photo')).toBeVisible();
+    await expect(armStage.getByText(ARM_HEADLINE)).toBeVisible();
+    await expect(armStage.getByText('The AI could not analyze that file.')).toHaveCount(0);
+    await expect(
+      armStage.getByText(/one still photo, so arm drift and movement over time could not be judged/),
+    ).toBeVisible();
+    expect(counters.tasks).toEqual(['fast-arm']);
+    await expect(counters.vision).toBe(1);
+    expect(fatal).toEqual([]);
+  });
+
+  test('movement lab arm mode accepts one photo and renders the AI sheet with the photo note', async ({
+    page,
+  }) => {
+    const fatal = watchFatalErrors(page);
+    const counters = await stubWorker(page, ARM_HEADLINE, ARM_OBSERVATION);
+
+    await gotoHash(page, '#lab/movement-lab');
+    await expect(
+      page.getByRole('heading', { level: 1, name: /Movement Lab/i }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /start trying/i }).click();
+
+    // Arm Raise is the default mode and upload its default source;
+    // the panel now takes a photo as well as a video.
+    await expect(page.getByText('Upload a photo or video of the arm hold')).toBeVisible();
+
+    await page.locator('.upload-panel input[type="file"]').setInputFiles({
+      name: 'arms.png',
+      mimeType: 'image/png',
+      buffer: PNG_BUFFER,
+    });
+
+    // The photo is prepared on this device and shown for approval;
+    // preparing it sent nothing anywhere.
+    await expect(
+      page.getByText('This photo is what the AI will look at. Nothing has been sent yet.'),
+    ).toBeVisible();
+    await expect(counters.vision).toBe(0);
+
+    await page.getByRole('button', { name: 'Analyze with AI' }).click();
+
+    const sheet = page.locator('.result-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText('Live AI', { exact: true })).toBeVisible();
+    await expect(sheet.getByText(ARM_HEADLINE)).toBeVisible();
+    // The photo note stands on the sheet: position change over time
+    // could not be judged from one still photo.
+    await expect(
+      sheet.getByText(/one still photo, so how the arm position changed or held over time/),
+    ).toBeVisible();
+    expect(counters.tasks).toEqual(['arm-video']);
     await expect(counters.vision).toBe(1);
     expect(fatal).toEqual([]);
   });

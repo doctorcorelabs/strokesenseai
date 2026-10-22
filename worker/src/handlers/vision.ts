@@ -99,7 +99,7 @@ const IMAGE_TASK_FOCUS: Record<VisionImageTask, string> = {
   'face-photo':
     'The user uploaded one photo of a face. Describe only what is visible in it: the position of the mouth corners and the eyebrows on the left and right sides of the face as they appear in the image. A single photo shows one moment and cannot show change over time; say so if that limits the description.',
   'face-video':
-    'The user uploaded frames sampled in time order from a short video of face movements. Compare the first frame with the later frames and describe how the mouth corners and the eyebrows on the left and right sides of the face appear to move or stay still across the sequence.',
+    'The user uploaded one or more images from a short video of face movements. If several frames are attached, compare the first frame with the later frames and describe how the mouth corners and the eyebrows on the left and right sides of the face appear to move or stay still across the sequence. If only one image is attached, describe the positions of the mouth corners and the eyebrows on the left and right sides of the face that are visible in that single image.',
   // The localizer task never uses this shared focus text: it is served
   // by its own system prompt (visionLocalizerSystemPrompt) because its
   // answer shape and its possibility framing differ from the
@@ -107,13 +107,13 @@ const IMAGE_TASK_FOCUS: Record<VisionImageTask, string> = {
   'face-localizer':
     'The user uploaded one photo of a face for the Face Lesion Localizer exercise, which is served by a dedicated system prompt.',
   'arm-video':
-    'The user uploaded frames sampled in time order from a short video of an arm being raised or held up. Describe how the position of the raised arm appears to change or stay across the frames, and compare the two sides if both arms are visible.',
+    'The user uploaded one or more images from a short video of an arm being raised or held up. If several frames are attached, describe how the position of the raised arm appears to change or stay across the frames. If only one image is attached, describe the position and posture of the raised arm that are visible in that single image. Compare the two sides if both arms are visible.',
   'hand-video':
-    'The user uploaded frames sampled in time order from a short video of finger tapping. Describe the tapping pattern that is visible across the frames, its apparent rhythm and regularity as a plain impression only, never as a counted rate or a measurement.',
+    'The user uploaded one or more images from a short video of finger tapping. If several frames are attached, describe the tapping pattern that is visible across the frames, its apparent rhythm and regularity as a plain impression only, never as a counted rate or a measurement. If only one image is attached, describe the position of the hand and the fingers that are visible in that single image, and note that a tapping rhythm cannot be judged from a still photo.',
   'fast-face':
-    'The user uploaded frames sampled in time order from the Face step of a guided FAST practice session: a relaxed face, then a smile, then raised eyebrows. Describe the visible movement of the mouth corners and the eyebrows on the left and right sides of the face across the frames.',
+    'The user uploaded one or more images from the Face step of a guided FAST practice session: a relaxed face, a smile, raised eyebrows. If several frames are attached, describe the visible movement of the mouth corners and the eyebrows on the left and right sides of the face across the frames. If only one image is attached, describe the facial expression and the positions of the mouth corners and the eyebrows on the left and right sides of the face that are visible in that single image.',
   'fast-arm':
-    'The user uploaded frames sampled in time order from the Arm step of a guided FAST practice session, an arm hold of about ten seconds. Describe how the position of each arm appears to change or stay across the frames.',
+    'The user uploaded one or more images from the Arm step of a guided FAST practice session, an arm hold of about ten seconds. If several frames are attached, describe how the position of each arm appears to change or stay across the frames. If only one image is attached, describe the position and posture of each arm that are visible in that single image, and note that whether an arm drifts over time cannot be judged from a still photo.',
   'document-photo':
     'The user uploaded a photo of a document. Transcribe the text that is actually readable and list the concrete facts that can be read, such as headings, dates, and medicine names exactly as printed. Do not interpret, complete, or guess text that is not readable; name the parts that cannot be read.',
 };
@@ -123,7 +123,8 @@ export function visionImageSystemPrompt(task: VisionImageTask): string {
     'You are StrokeSense AI Lab, an English-only educational explainer for Indonesia, not a clinician or a medical inference engine.',
     'This service is an experimental learning lab that illustrates how AI techniques measure signals related to stroke education. It does not diagnose, screen for, or rule out stroke. A user uploaded images from an on-screen learning exercise; describe only the signals that are visible in the images.',
     IMAGE_TASK_FOCUS[task],
-    'State uncertainty plainly when the view is cropped, blurred, dark, or ambiguous. If the subject of the exercise is not visible, the images are too unclear to describe, or there are not enough frames to compare, do not guess: set "cannotAnalyze" to true and put the reason in "reason".',
+    'State uncertainty plainly when the view is cropped, blurred, dark, or ambiguous. If the subject of the exercise is not visible, the images are too unclear to describe, or the attached file does not show the exercise subject at all, do not guess: set "cannotAnalyze" to true and put the reason in "reason".',
+    'When only one image is attached, assess the static signs visible in that single image, such as position, symmetry, and posture, and add one observation stating that anything that requires movement or comparison over time cannot be judged from a single still image. A single image on its own is never a reason to set "cannotAnalyze" to true.',
     'Never diagnose. Never classify anything as stroke, Bell palsy, or any other condition. Never localize a lesion. Never call anything normal or abnormal. Never give a score, a percentage, or an invented precise measurement; describe visible differences in plain words only. Do not request identifying information, and never repeat identifying information that appears in the images.',
     'Answer with ONLY one valid JSON object and no other text, in exactly this shape: {"headline": string, "observations": string[], "cannotAnalyze": boolean, "reason": string or null}. The headline is one short sentence summarizing the visible signals. Observations are short plain sentences about visible signals only. When cannotAnalyze is false, reason is null.',
   ].join('\n');

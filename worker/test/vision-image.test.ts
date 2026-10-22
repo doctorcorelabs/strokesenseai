@@ -104,6 +104,110 @@ test('V-IMG: a valid image request returns the model JSON with mode live-ai', as
   }
 });
 
+function systemPromptSentToProvider(stub: FetchCapture): string {
+  const messages = stub.lastBody()?.messages as { role: string; content: unknown }[] | undefined;
+  const system = messages?.find((message) => message.role === 'system');
+  return typeof system?.content === 'string' ? system.content : '';
+}
+
+function userTextSentToProvider(stub: FetchCapture): string {
+  const messages = stub.lastBody()?.messages as { role: string; content: unknown }[] | undefined;
+  const user = messages?.find((message) => message.role === 'user');
+  const parts = user?.content as { type: string; text?: string }[] | undefined;
+  return parts?.[0]?.text ?? '';
+}
+
+test('V-IMG: a single fast-face image carries the single-image rule, not a frame-count refusal', async () => {
+  const stub = stubFetchReturning(MODEL_JSON);
+  try {
+    const response = await handleVision(
+      visionRequest({ mode: 'image', task: 'fast-face', images: [PNG_URL] }),
+      configuredEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(stub.calls(), 1);
+    const system = systemPromptSentToProvider(stub);
+    assert.ok(system.includes('When only one image is attached'));
+    assert.ok(system.includes('cannot be judged from a single still image'));
+    assert.ok(system.includes('never a reason to set "cannotAnalyze" to true'));
+    assert.ok(!system.includes('not enough frames to compare'));
+    assert.ok(system.includes('If only one image is attached, describe the facial expression'));
+    assert.ok(userTextSentToProvider(stub).includes('One image is attached.'));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-IMG: a single fast-arm image carries the single-image rule, not a frame-count refusal', async () => {
+  const stub = stubFetchReturning(MODEL_JSON);
+  try {
+    const response = await handleVision(
+      visionRequest({ mode: 'image', task: 'fast-arm', images: [PNG_URL] }),
+      configuredEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(stub.calls(), 1);
+    const system = systemPromptSentToProvider(stub);
+    assert.ok(system.includes('When only one image is attached'));
+    assert.ok(system.includes('cannot be judged from a single still image'));
+    assert.ok(system.includes('never a reason to set "cannotAnalyze" to true'));
+    assert.ok(!system.includes('not enough frames to compare'));
+    assert.ok(system.includes('If only one image is attached, describe the position and posture of each arm'));
+    assert.ok(userTextSentToProvider(stub).includes('One image is attached.'));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-IMG: several fast-face frames keep the cross-frame comparison instructions', async () => {
+  const stub = stubFetchReturning(MODEL_JSON);
+  try {
+    const response = await handleVision(
+      visionRequest({ mode: 'image', task: 'fast-face', images: [PNG_URL, JPG_URL, PNG_URL] }),
+      configuredEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(stub.calls(), 1);
+    const system = systemPromptSentToProvider(stub);
+    assert.ok(
+      system.includes('If several frames are attached, describe the visible movement of the mouth corners'),
+    );
+    assert.ok(userTextSentToProvider(stub).includes('3 images are attached as frames in time order'));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-IMG: a single-image fast-face reply that records the still-image limit passes through intact', async () => {
+  const singleImageJson =
+    '{"headline":"The mouth corners appear uneven in this photo.","observations":["The left mouth corner appears lower than the right in this image.","Movement over time cannot be judged from a single still image."],"cannotAnalyze":false,"reason":null}';
+  const stub = stubFetchReturning(singleImageJson);
+  try {
+    const response = await handleVision(
+      visionRequest({ mode: 'image', task: 'fast-face', images: [PNG_URL] }),
+      configuredEnv,
+    );
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { mode?: string; reply?: string };
+    assert.equal(body.mode, 'live-ai');
+    const reply = JSON.parse(body.reply ?? '') as {
+      headline?: string;
+      observations?: string[];
+      cannotAnalyze?: boolean;
+      reason?: unknown;
+    };
+    assert.equal(reply.headline, 'The mouth corners appear uneven in this photo.');
+    assert.deepEqual(reply.observations, [
+      'The left mouth corner appears lower than the right in this image.',
+      'Movement over time cannot be judged from a single still image.',
+    ]);
+    assert.equal(reply.cannotAnalyze, false);
+    assert.equal(reply.reason, null);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('V-IMG: a non-JSON model reply is wrapped into the stable client shape', async () => {
   const stub = stubFetchReturning('The arm appears to stay in place across the frames.');
   try {

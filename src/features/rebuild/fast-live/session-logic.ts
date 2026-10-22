@@ -38,6 +38,24 @@ export const HOLD_SECONDS = 10;
 export const AI_FRAMING_LINE =
   'AI analysis describes what the AI can see; it is not a measurement.';
 
+/**
+ * The honesty note that stands on an AI result that came from one
+ * still photo of the face. A photo has no time in it, so the smile
+ * and brow movements were never judged; only the signs visible in
+ * that single moment were described. Shown on the stage card and on
+ * the observation sheet whenever the face stage source is a photo.
+ */
+export const AI_FACE_PHOTO_NOTE =
+  'This was one still photo, so movement could not be judged. Only the signs visible in this single moment were described.';
+
+/**
+ * The arm twin of AI_FACE_PHOTO_NOTE: one still photo shows where the
+ * arms were in one moment, never whether they held or drifted over
+ * time. Shown whenever the arm stage source is a photo.
+ */
+export const AI_ARM_PHOTO_NOTE =
+  'This was one still photo, so arm drift and movement over time could not be judged. Only the arm position visible in this single moment was described.';
+
 /** The privacy line for the upload paths whose frames leave the device. */
 export const AI_UPLOAD_PRIVACY_LINE =
   'Frames from your file are sent to the AI service for analysis. Nothing is stored by this site.';
@@ -49,14 +67,28 @@ export function aiSourceLabel(source: AiStageOutcome['source']): string {
     : 'AI analysis of your uploaded video';
 }
 
+/**
+ * Which vision task a FAST face upload goes to, by file kind. A
+ * video is the frame-sequence exercise ('fast-face'); a still photo
+ * goes to the single-photo task ('face-photo'), whose prompt is
+ * written for exactly one image. Sending one photo to the sequence
+ * task makes the model refuse it for having too few frames.
+ */
+export function faceUploadTask(isVideo: boolean): 'fast-face' | 'face-photo' {
+  return isVideo ? 'fast-face' : 'face-photo';
+}
+
 /** Sheet lines for one AI stage outcome: label, verbatim model words, framing. */
-function aiStageLines(stageLabel: string, outcome: AiStageOutcome): string[] {
+function aiStageLines(stageLabel: string, outcome: AiStageOutcome, photoNote: string): string[] {
   const lines = [
     `${stageLabel}: ${aiSourceLabel(outcome.source)}`,
     `  ${outcome.headline}`,
     ...outcome.observations.map((observation) => `  - ${observation}`),
     `  ${AI_FRAMING_LINE}`,
   ];
+  if (outcome.source === 'photo') {
+    lines.push(`  ${photoNote}`);
+  }
   return lines;
 }
 
@@ -341,7 +373,7 @@ function faceSection(face: FaceStageOutcome | undefined, lines: string[]): void 
     return;
   }
   if (face.status === 'ai') {
-    lines.push(...aiStageLines('Face stage', face));
+    lines.push(...aiStageLines('Face stage', face, AI_FACE_PHOTO_NOTE));
     return;
   }
   lines.push(...faceTaskLines('Smile task', SMILE_SECONDS, face.smile));
@@ -371,7 +403,7 @@ function armSection(arm: ArmStageOutcome | undefined, lines: string[]): void {
     return;
   }
   if (arm.status === 'ai') {
-    lines.push(...aiStageLines('Arm stage', arm));
+    lines.push(...aiStageLines('Arm stage', arm, AI_ARM_PHOTO_NOTE));
     return;
   }
   lines.push(`Hold duration: ${arm.holdSeconds} seconds (${arm.usableSeconds} usable)`);

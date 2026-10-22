@@ -5,6 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  AI_ARM_PHOTO_NOTE,
+  AI_FACE_PHOTO_NOTE,
   AI_FRAMING_LINE,
   AI_UPLOAD_PRIVACY_LINE,
   aiSourceLabel,
@@ -14,6 +16,7 @@ import {
   describeArmHold,
   describeFaceTask,
   faceTaskOutcome,
+  faceUploadTask,
   headPoseFromMatrix,
   medianOf,
   poseWithinTolerance,
@@ -260,6 +263,61 @@ describe('buildObservationSheetText', () => {
     );
     expect(aiSourceLabel('photo')).toBe('AI analysis of your uploaded photo');
     expect(aiSourceLabel('video')).toBe('AI analysis of your uploaded video');
+  });
+
+  it('keeps the still-photo honesty notes word for word', () => {
+    expect(AI_FACE_PHOTO_NOTE).toBe(
+      'This was one still photo, so movement could not be judged. Only the signs visible in this single moment were described.',
+    );
+    expect(AI_ARM_PHOTO_NOTE).toBe(
+      'This was one still photo, so arm drift and movement over time could not be judged. Only the arm position visible in this single moment was described.',
+    );
+  });
+
+  it('sends face videos to the sequence task and face photos to the photo task', () => {
+    expect(faceUploadTask(true)).toBe('fast-face');
+    expect(faceUploadTask(false)).toBe('face-photo');
+  });
+
+  it('adds the photo note under AI stages that came from a photo, and only those', () => {
+    const photoSession: FastSession = {
+      face: {
+        status: 'ai',
+        source: 'photo',
+        headline: 'One mouth corner sits lower than the other in this photo.',
+        observations: ['Both eyebrows appear level in this single photo.'],
+      },
+      arm: {
+        status: 'ai',
+        source: 'photo',
+        headline: 'The right arm sits lower than the left in this photo.',
+        observations: ['Both arms are raised out to the sides.'],
+      },
+      speech: { status: 'skipped' },
+    };
+    const photoText = buildObservationSheetText(photoSession, when);
+    expect(photoText).toContain(AI_FACE_PHOTO_NOTE);
+    expect(photoText).toContain(AI_ARM_PHOTO_NOTE);
+
+    const videoSession: FastSession = {
+      face: {
+        status: 'ai',
+        source: 'video',
+        headline: 'The mouth corners rise in the later frames.',
+        observations: ['The brows rise near the end of the video.'],
+      },
+      arm: {
+        status: 'ai',
+        source: 'video',
+        headline: 'The right arm appears lower in the later frames.',
+        observations: ['The left arm stays at about the same height across the frames.'],
+      },
+      speech: { status: 'skipped' },
+    };
+    const videoText = buildObservationSheetText(videoSession, when);
+    expect(videoText).not.toContain(AI_FACE_PHOTO_NOTE);
+    expect(videoText).not.toContain(AI_ARM_PHOTO_NOTE);
+    expect(videoText).not.toContain('one still photo');
   });
 
   it('renders AI upload stages with their source labels, model words, and framing', () => {

@@ -11,6 +11,8 @@
 
 import { ArmChart, MovementBars, WordMapView } from './bits';
 import {
+  AI_ARM_PHOTO_NOTE,
+  AI_FACE_PHOTO_NOTE,
   AI_FRAMING_LINE,
   BROW_SECONDS,
   SMILE_SECONDS,
@@ -66,6 +68,7 @@ export default function ObservationSheet({ session }: { session: FastSession }) 
             ))}
           </ul>
           <p className="muted">{AI_FRAMING_LINE}</p>
+          {face.source === 'photo' ? <p className="muted">{AI_FACE_PHOTO_NOTE}</p> : null}
         </>
       ) : (
         <>
@@ -121,6 +124,7 @@ export default function ObservationSheet({ session }: { session: FastSession }) 
             ))}
           </ul>
           <p className="muted">{AI_FRAMING_LINE}</p>
+          {arm.source === 'photo' ? <p className="muted">{AI_ARM_PHOTO_NOTE}</p> : null}
         </>
       ) : (
         <>

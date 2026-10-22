@@ -27,6 +27,7 @@ import { computeBrowMovement, computeSmileMovement, relativeMovement } from '../
 import { useCameraStream } from './camera';
 import { MovementBars, StageSourcePicker, type StageSource } from './bits';
 import {
+  AI_FACE_PHOTO_NOTE,
   AI_FRAMING_LINE,
   AI_UPLOAD_PRIVACY_LINE,
   BROW_SECONDS,
@@ -34,6 +35,7 @@ import {
   aiSourceLabel,
   describeFaceTask,
   faceTaskOutcome,
+  faceUploadTask,
   headPoseFromMatrix,
   medianOf,
   poseWithinTolerance,
@@ -441,7 +443,11 @@ export default function FaceStage({
       const images = isVideo
         ? (await extractVideoFrames(uploadFile, 6)).map((frame) => frame.dataUrl)
         : [await imageFileToDataUrl(uploadFile)];
-      const result = await analyzeWithAi({ task: 'fast-face', images });
+      // A video goes to the frame-sequence task; one still photo goes
+      // to the single-photo task, whose prompt is written for exactly
+      // one image. Sending a photo to the sequence task makes the
+      // model refuse it for having too few frames to compare.
+      const result = await analyzeWithAi({ task: faceUploadTask(isVideo), images });
       if (result.emergency) {
         setEmergency(true);
         return;
@@ -567,6 +573,9 @@ export default function FaceStage({
               ))}
             </ul>
             <p className="muted">{AI_FRAMING_LINE}</p>
+            {aiOutcome.source === 'photo' ? (
+              <p className="muted">{AI_FACE_PHOTO_NOTE}</p>
+            ) : null}
             <div className="fast-actions">
               <button
                 type="button"
@@ -613,7 +622,8 @@ export default function FaceStage({
             <p>
               Upload a photo of one face, or a short video of the face movements. For a video,
               start with a relaxed face, then smile as wide as you can, then raise your eyebrows
-              as high as you can. The AI describes what it can see in the file; it does not
+              as high as you can. A photo is described as one still moment, so movement cannot
+              be judged from it. The AI describes what it can see in the file; it does not
               measure your face.
             </p>
             <UploadPanel

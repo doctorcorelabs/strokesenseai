@@ -1,8 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { mapAiResult } from './aiOutcome';
+import { mapAiResult, photoNoteForTask, uploadFileKind } from './aiOutcome';
 
 const FALLBACK_HEADLINE = 'The AI described your upload.';
 const FALLBACK_REASON = 'The AI could not see enough in these frames.';
+
+describe('uploadFileKind', () => {
+  it('maps still images to the photo kind', () => {
+    expect(uploadFileKind({ type: 'image/jpeg' })).toBe('photo');
+    expect(uploadFileKind({ type: 'image/png' })).toBe('photo');
+  });
+
+  it('maps videos to the video kind', () => {
+    expect(uploadFileKind({ type: 'video/mp4' })).toBe('video');
+    expect(uploadFileKind({ type: 'video/webm' })).toBe('video');
+  });
+});
+
+describe('photoNoteForTask', () => {
+  it('tells the arm stage that position change over time was not judged', () => {
+    expect(photoNoteForTask('arm-video')).toBe(
+      'This was one still photo, so how the arm position changed or held over time could not be judged. Only the position visible in this single moment was described.',
+    );
+  });
+
+  it('tells the hand stage that the tapping rhythm was not judged', () => {
+    expect(photoNoteForTask('hand-video')).toBe(
+      'This was one still photo, so the tapping rhythm could not be judged. Only the hand position visible in this single moment was described.',
+    );
+  });
+});
 
 describe('mapAiResult', () => {
   it('lets an emergency answer win over a normal-looking answer', () => {

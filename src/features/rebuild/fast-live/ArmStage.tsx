@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NormalizedLandmark, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision';
 import { getLandmarker, ModelLoadError } from '../../../ml/engine';
-import { extractVideoFrames } from '../../../ml/analyze';
+import { extractVideoFrames, imageFileToDataUrl } from '../../../ml/analyze';
 import { analyzeWithAi } from '../../../ai/visionClient';
 import { hasSessionConsent } from '../../../ai/client';
 import PermissionPrime, { PermissionDenied } from '../../../components/PermissionPrime';
@@ -24,6 +24,7 @@ import { armProjectedAngle, smoothSeries } from '../movement-lab/angles';
 import { useCameraStream } from './camera';
 import { ArmChart, StageSourcePicker, type StageSource } from './bits';
 import {
+  AI_ARM_PHOTO_NOTE,
   AI_FRAMING_LINE,
   AI_UPLOAD_PRIVACY_LINE,
   HOLD_SECONDS,
@@ -378,21 +379,15 @@ export default function ArmStage({
   }, [camera, guided, stopLoop]);
 
   // ---------------------------------------------------------------------
-  // Upload source: frames from an uploaded video go to the AI service
+  // Upload source: an uploaded photo or video goes to the AI service.
+  // A video is sampled into frames so the hold can be described over
+  // time; one still photo is sent as a single image and described as
+  // the one position it shows, with the photo note on the result
+  // saying that drift over time could not be judged from it.
   // ---------------------------------------------------------------------
   const handleFile = useCallback((file: File) => {
     setAiOutcome(null);
     setAiFailure(null);
-    if (file.type.startsWith('image/')) {
-      // The arm stage is about a hold over time; one still picture has
-      // no hold in it, so it is refused here with the reason, not
-      // silently analyzed as if it were a video.
-      setUploadFile(null);
-      setUploadError(
-        'The arm stage needs a video of the arm hold, not a photo. Please choose a video file instead.',
-      );
-      return;
-    }
     setUploadError(null);
     setUploadFile(file);
   }, []);
@@ -414,10 +409,13 @@ export default function ArmStage({
     setUploadBusy(true);
     setUploadError(null);
     try {
-      const frames = await extractVideoFrames(uploadFile, 6);
+      const isVideo = uploadFile.type.startsWith('video/');
+      const images = isVideo
+        ? (await extractVideoFrames(uploadFile, 6)).map((frame) => frame.dataUrl)
+        : [await imageFileToDataUrl(uploadFile)];
       const result = await analyzeWithAi({
         task: 'fast-arm',
-        images: frames.map((frame) => frame.dataUrl),
+        images,
       });
       if (result.emergency) {
         setEmergency(true);
@@ -427,15 +425,15 @@ export default function ArmStage({
         setAiFailure({
           reason:
             result.reason ??
-            'The AI could not see the arms clearly enough in that video to describe the hold.',
+            'The AI could not see the arms clearly enough in that file to describe them.',
           suggestion:
-            'Try a video where both arms stay in frame for the whole hold, in brighter light, or use the live camera instead.',
+            'Try a clearer photo or video with both arms raised and fully in frame, in brighter light, or use the live camera instead.',
         });
         return;
       }
       setAiOutcome({
         status: 'ai',
-        source: 'video',
+        source: isVideo ? 'video' : 'photo',
         headline: result.headline,
         observations: result.observations,
       });
@@ -521,7 +519,8 @@ export default function ArmStage({
   }
 
   // ---------------------------------------------------------------------
-  // Upload mode: the AI vision service describes an uploaded video
+  // Upload mode: the AI vision service describes an uploaded photo or
+  // video of the arms
   // ---------------------------------------------------------------------
   if (source === 'upload') {
     return (
@@ -545,6 +544,9 @@ export default function ArmStage({
               ))}
             </ul>
             <p className="muted">{AI_FRAMING_LINE}</p>
+            {aiOutcome.source === 'photo' ? (
+              <p className="muted">{AI_ARM_PHOTO_NOTE}</p>
+            ) : null}
             <div className="fast-actions">
               <button
                 type="button"
@@ -560,7 +562,7 @@ export default function ArmStage({
           </div>
         ) : aiFailure ? (
           <div className="fast-stage-card">
-            <p className="fast-card-headline">The AI could not analyze that video.</p>
+            <p className="fast-card-headline">The AI could not analyze that file.</p>
             <p>{aiFailure.reason}</p>
             <p className="muted">{aiFailure.suggestion}</p>
             <div className="fast-actions">
@@ -579,7 +581,7 @@ export default function ArmStage({
                   handleClear();
                 }}
               >
-                Choose a different video
+                Choose a different file
               </button>
               <button type="button" className="btn" onClick={redo}>
                 Redo arm stage
@@ -589,14 +591,15 @@ export default function ArmStage({
         ) : (
           <>
             <p>
-              Upload a short video of the arm hold: both arms raised out to the sides, palms
-              down, held for about 10 seconds. The AI describes how the arms appear across the
-              video; it does not measure angles.
+              Upload a photo of both arms raised, or a short video of the arm hold: both arms
+              raised out to the sides, palms down, held for about 10 seconds in a video. From a
+              video the AI describes how the arms appear over time; from one photo it can only
+              describe the position it sees. It does not measure angles.
             </p>
             <UploadPanel
               accept="both"
-              label="Upload a video of the arm hold"
-              hint="Both arms raised and in frame for the whole hold works best."
+              label="Upload a photo or video of the arm hold"
+              hint="Both arms raised and fully in frame works best."
               privacyLine={AI_UPLOAD_PRIVACY_LINE}
               onFile={handleFile}
               onClear={handleClear}
@@ -611,7 +614,7 @@ export default function ArmStage({
               <>
                 {!sessionAgreed ? (
                   <ConsentNotice
-                    scopeLabel="frames from the video you upload"
+                    scopeLabel="frames from the photo or video you upload"
                     checked={consent}
                     onChange={(checked) => {
                       setConsent(checked);
@@ -622,7 +625,7 @@ export default function ArmStage({
                 {consentPrompt && !consent ? (
                   <p className="muted">
                     One step before AI analysis: tick the agreement box above so the service may
-                    process the frames from your video, then press Analyze with AI again.
+                    process the frames from your file, then press Analyze with AI again.
                   </p>
                 ) : null}
                 <div className="fast-actions">

@@ -79,13 +79,13 @@ type Outcome =
       durationMs: number;
       hands: Partial<Record<ArmSide, TapDetection>>;
     }
-  | { kind: 'ai'; headline: string; observations: string[] }
+  | { kind: 'ai'; headline: string; observations: string[]; photoNote?: string }
   | { kind: 'emergency' }
   | { kind: 'cannot'; headline: string; reason: string; suggestion: string };
 
-/** The three ways a mode can be fed: an uploaded video analyzed by
- * the AI (the default), the live camera measured on this device, or
- * the labelled demo. */
+/** The three ways a mode can be fed: an uploaded photo or video
+ * analyzed by the AI (the default), the live camera measured on this
+ * device, or the labelled demo. */
 type DataSource = 'upload' | 'camera' | 'demo';
 
 function SourceTabs({
@@ -661,7 +661,7 @@ function ArmRaiseMode({
         {tabs}
         <MovementUploadAnalyze
           task="arm-video"
-          uploadLabel="Upload a video of the arm hold"
+          uploadLabel="Upload a photo or video of the arm hold"
           hint="Record from the front: raise both arms out to the sides and hold for about 10 seconds"
           fallbackHeadline="The AI described the arm hold in your upload."
           onOutcome={onOutcome}
@@ -1144,7 +1144,7 @@ function HandLabMode({
         {tabs}
         <MovementUploadAnalyze
           task="hand-video"
-          uploadLabel="Upload a video of your hand tapping"
+          uploadLabel="Upload a photo or video of your hand tapping"
           hint="Show one hand close to the camera with the palm facing it, and tap your thumb to your index finger again and again so every tap is easy to see."
           fallbackHeadline="The AI described the hand tapping in your upload."
           onOutcome={onOutcome}
@@ -1464,6 +1464,7 @@ export default function MovementLab() {
         modeLabel="Live AI"
       >
         <p>{AI_FRAMING_LINE}</p>
+        {outcome.photoNote ? <p>{outcome.photoNote}</p> : null}
         {outcome.observations.length > 0 ? (
           <ul>
             {outcome.observations.map((line, index) => (
