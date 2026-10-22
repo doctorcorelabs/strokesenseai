@@ -97,6 +97,9 @@ export const FULL_PAGE_LABS: Record<string, LabComponent> = {
   'face-lab': lazy(() =>
     import('./rebuild/face-lab').then((m) => ({ default: m.FaceLab })),
   ),
+  'lesion-localizer': lazy(() =>
+    import('./rebuild/lesion-localizer').then((m) => ({ default: m.LesionLocalizer })),
+  ),
   'movement-lab': lazy(() =>
     import('./rebuild/movement-lab').then((m) => ({ default: m.MovementLab })),
   ),

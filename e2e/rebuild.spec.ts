@@ -141,6 +141,7 @@ test('face analyzer alias lands on Face Lab and a refused camera ends in cannot-
 const R1_ROUTES: Array<{ hash: string; heading: RegExp }> = [
   { hash: '#lab/fast-live-check', heading: /FAST Live Check/i },
   { hash: '#lab/face-lab', heading: /Face Lab/i },
+  { hash: '#lab/lesion-localizer', heading: /Face Lesion Localizer/i },
   { hash: '#lab/movement-lab', heading: /Movement Lab/i },
   { hash: '#lab/speech-lab', heading: /Speech Lab/i },
   { hash: '#lab/document-studio', heading: /Document Studio/i },

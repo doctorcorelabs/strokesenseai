@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { handleVision, normalizeVisionReply } from '../src/handlers/vision.ts';
+import { handleVision, normalizeLocalizerReply, normalizeVisionReply } from '../src/handlers/vision.ts';
 import { issueConsentToken } from '../src/auth.ts';
 import worker from '../src/index.ts';
 import type { EnvLike } from '../src/providers.ts';
@@ -309,4 +309,246 @@ test('V-IMG router: the rate limiter bucket for the vision route is keyed vision
   assert.equal(body.error?.code, 'rate_limited');
   assert.ok(names.length >= 1);
   assert.ok(names[0].startsWith('vision:'), `expected a vision bucket, got ${names[0]}`);
+});
+
+// ---------------------------------------------------------------------------
+// V-LOC: the face-localizer task on image mode. It runs a dedicated
+// system prompt and a strict server-side normalizer: the extended reply
+// shape is rebuilt from validated fields only, confidence is clamped to
+// the single-photo ceiling, and a cannotAnalyze result never carries
+// candidates. The emergency guard still runs before any model call.
+// ---------------------------------------------------------------------------
+
+interface LocalizerReply {
+  headline?: string;
+  observations?: string[];
+  cannotAnalyze?: boolean;
+  reason?: string | null;
+  pattern?: string;
+  lesionCandidates?: {
+    site: string;
+    tract: string;
+    vessel: string;
+    confidence: string;
+    rationale: string;
+  }[];
+  possibilities?: { name: string; note: string }[];
+}
+
+const LOCALIZER_CANDIDATE = {
+  site: 'Face area of the motor cortex (lower precentral gyrus), left side',
+  tract: 'Corticobulbar tract',
+  vessel: 'Precentral branch of the superior division of the middle cerebral artery',
+  confidence: 'moderate',
+  rationale: 'Forehead sparing points to a lesion above the facial nucleus.',
+};
+
+const LOCALIZER_JSON = JSON.stringify({
+  headline:
+    'The visible pattern is most consistent with a central pattern: the right lower face looks weaker while the forehead appears spared.',
+  observations: [
+    'The right mouth corner sits lower than the left.',
+    'Forehead wrinkles still form on the right side.',
+  ],
+  cannotAnalyze: false,
+  reason: null,
+  pattern: 'central-umn',
+  lesionCandidates: [
+    LOCALIZER_CANDIDATE,
+    {
+      site: 'Genu of the internal capsule, left side',
+      tract: 'Corticobulbar fibers in the genu',
+      vessel: 'Lateral lenticulostriate arteries',
+      confidence: 'low',
+      rationale: 'A capsular lesion can give the same face pattern.',
+    },
+  ],
+  possibilities: [
+    {
+      name: 'Ischemic stroke in MCA territory',
+      note: 'Fits a central pattern; limb signs would strengthen it.',
+    },
+    {
+      name: 'Small subcortical infarct',
+      note: 'Also fits; one photo cannot separate cortical from capsular.',
+    },
+  ],
+});
+
+async function localizerReply(content: string, note?: string): Promise<{ status: number; body: { mode?: string; task?: string; reply?: string }; stub: FetchCapture }> {
+  const stub = stubFetchReturning(content);
+  try {
+    const response = await handleVision(
+      visionRequest({
+        mode: 'image',
+        task: 'face-localizer',
+        images: [PNG_URL],
+        ...(note ? { note } : {}),
+      }),
+      configuredEnv,
+    );
+    const body = (await response.json()) as { mode?: string; task?: string; reply?: string };
+    return { status: response.status, body, stub };
+  } catch (error) {
+    stub.restore();
+    throw error;
+  }
+}
+
+test('V-LOC: a valid structured localizer reply passes through intact', async () => {
+  const { status, body, stub } = await localizerReply(LOCALIZER_JSON);
+  try {
+    assert.equal(status, 200);
+    assert.equal(body.mode, 'live-ai');
+    assert.equal(body.task, 'face-localizer');
+    const reply = JSON.parse(body.reply ?? '') as LocalizerReply;
+    assert.equal(reply.cannotAnalyze, false);
+    assert.equal(reply.reason, null);
+    assert.equal(reply.pattern, 'central-umn');
+    assert.deepEqual(reply.lesionCandidates, JSON.parse(LOCALIZER_JSON).lesionCandidates);
+    assert.deepEqual(reply.possibilities, JSON.parse(LOCALIZER_JSON).possibilities);
+
+    assert.equal(stub.calls(), 1);
+    const sent = stub.lastBody();
+    assert.equal(sent?.max_tokens, 2500);
+    const messages = sent?.messages as { role: string; content: unknown }[];
+    const system = messages[0].content as string;
+    assert.ok(system.includes('Face Lesion Localizer'));
+    assert.ok(system.includes('pontine trap'));
+    assert.ok(!system.includes('Never localize a lesion'), 'localizer must not inherit the shared prohibition block');
+    const parts = messages[1].content as { type: string; text?: string }[];
+    assert.ok(parts[0].text?.includes('Assess the visible signals'));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-LOC: a model confidence of high is downgraded to moderate', async () => {
+  const content = JSON.stringify({
+    headline: 'A pattern worth exploring.',
+    observations: ['The left mouth corner sits lower than the right.'],
+    cannotAnalyze: false,
+    reason: null,
+    pattern: 'peripheral-lmn',
+    lesionCandidates: [
+      { ...LOCALIZER_CANDIDATE, confidence: 'high' },
+      { ...LOCALIZER_CANDIDATE, confidence: 'certain' },
+    ],
+    possibilities: [],
+  });
+  const { status, body, stub } = await localizerReply(content);
+  try {
+    assert.equal(status, 200);
+    const reply = JSON.parse(body.reply ?? '') as LocalizerReply;
+    assert.deepEqual(
+      reply.lesionCandidates?.map((candidate) => candidate.confidence),
+      ['moderate', 'low'],
+    );
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-LOC: a cannotAnalyze result empties the pattern and both lists', async () => {
+  const content = JSON.stringify({
+    headline: 'This photo cannot be analyzed.',
+    observations: [],
+    cannotAnalyze: true,
+    reason: 'The image is too blurred to judge the face.',
+    pattern: 'peripheral-lmn',
+    lesionCandidates: [LOCALIZER_CANDIDATE],
+    possibilities: [{ name: 'Bell palsy', note: 'Should be discarded by the server.' }],
+  });
+  const { status, body, stub } = await localizerReply(content);
+  try {
+    assert.equal(status, 200);
+    const reply = JSON.parse(body.reply ?? '') as LocalizerReply;
+    assert.equal(reply.cannotAnalyze, true);
+    assert.equal(reply.reason, 'The image is too blurred to judge the face.');
+    assert.equal(reply.pattern, '');
+    assert.deepEqual(reply.lesionCandidates, []);
+    assert.deepEqual(reply.possibilities, []);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-LOC: broken fields are dropped or coerced and lists are capped', async () => {
+  const extraCandidate = (n: number) => ({ ...LOCALIZER_CANDIDATE, site: `Site ${n}` });
+  const extraPossibility = (n: number) => ({ name: `Possibility ${n}`, note: 'A note.' });
+  const content = JSON.stringify({
+    headline: 'A mixed reply with several broken fields.',
+    observations: ['A usable observation.', 42, '', null],
+    cannotAnalyze: false,
+    reason: 'should be nulled because cannotAnalyze is false',
+    pattern: 'sideways',
+    lesionCandidates: [
+      extraCandidate(1),
+      { site: 'Missing the other fields' },
+      'not an object',
+      extraCandidate(2),
+      extraCandidate(3),
+      extraCandidate(4),
+    ],
+    possibilities: [
+      { name: 'Missing its note' },
+      extraPossibility(1),
+      extraPossibility(2),
+      extraPossibility(3),
+      extraPossibility(4),
+      extraPossibility(5),
+      extraPossibility(6),
+    ],
+    unexpectedField: 'must be dropped',
+  });
+  const { status, body, stub } = await localizerReply(content);
+  try {
+    assert.equal(status, 200);
+    const reply = JSON.parse(body.reply ?? '') as LocalizerReply & Record<string, unknown>;
+    assert.equal(reply.pattern, 'unclear');
+    assert.equal(reply.reason, null);
+    assert.deepEqual(reply.observations, ['A usable observation.']);
+    assert.deepEqual(
+      reply.lesionCandidates?.map((candidate) => candidate.site),
+      ['Site 1', 'Site 2', 'Site 3'],
+    );
+    assert.equal(reply.possibilities?.length, 5);
+    assert.ok(!('unexpectedField' in reply));
+  } finally {
+    stub.restore();
+  }
+});
+
+test('V-LOC: a non-JSON model reply falls back to a safe cannotAnalyze result', async () => {
+  const { status, body, stub } = await localizerReply('This is definitely Bell palsy, case closed.');
+  try {
+    assert.equal(status, 200);
+    const reply = JSON.parse(body.reply ?? '') as LocalizerReply;
+    assert.equal(reply.cannotAnalyze, true);
+    assert.equal(reply.headline, 'AI analysis');
+    assert.equal(reply.pattern, '');
+    assert.deepEqual(reply.lesionCandidates, []);
+    assert.deepEqual(reply.possibilities, []);
+    assert.ok(typeof reply.reason === 'string' && reply.reason.length > 0);
+  } finally {
+    stub.restore();
+  }
+  const direct = JSON.parse(normalizeLocalizerReply('not json at all')) as LocalizerReply;
+  assert.equal(direct.cannotAnalyze, true);
+  assert.deepEqual(direct.lesionCandidates, []);
+});
+
+test('V-LOC: an acute-symptom note returns the emergency reply before the model', async () => {
+  const { status, body, stub } = await localizerReply(
+    LOCALIZER_JSON,
+    'My face is drooping and my speech is slurred right now',
+  );
+  try {
+    assert.equal(status, 200);
+    assert.equal(body.mode, 'emergency');
+    assert.ok(body.reply?.includes('119'));
+    assert.equal(stub.calls(), 0);
+  } finally {
+    stub.restore();
+  }
 });

@@ -1,0 +1,202 @@
+/* Face Lesion Localizer styles. Local to the feature, prefix loc-,
+   global design tokens only. One column everywhere: the result reads
+   as a single calm list, never a dashboard. */
+
+/* Workspace (step 2) */
+
+.loc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.loc-photo-thumb {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #d9e2de;
+  background: #e3eae7;
+}
+
+.loc-note {
+  margin-top: 16px;
+}
+
+.loc-note-input {
+  min-height: 76px;
+}
+
+.loc-status-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.loc-status-step {
+  font-size: 0.92rem;
+  color: #6b7a74;
+}
+
+.loc-status-step.is-done {
+  color: #126454;
+  font-weight: 600;
+}
+
+.loc-status-step.is-active {
+  color: #153e34;
+  font-weight: 700;
+}
+
+.loc-failure {
+  border: 1px solid #e5c07b;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fdf6e9;
+  margin-top: 12px;
+}
+
+.loc-failure h3 {
+  margin: 0 0 6px;
+  color: #7a4a12;
+}
+
+.loc-emergency {
+  margin-top: 12px;
+}
+
+/* Result body (shared by the example and a real result) */
+
+.loc-result {
+  display: grid;
+  gap: 6px;
+}
+
+.loc-opening {
+  font-size: 1.05rem;
+}
+
+.loc-mode-marker {
+  color: var(--muted);
+  font-size: 0.94rem;
+  margin-top: -4px;
+}
+
+.loc-pattern {
+  margin: 10px 0 4px;
+}
+
+.loc-pattern-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+  color: var(--deep);
+  margin: 2px 0 6px;
+}
+
+.loc-pattern-note {
+  margin: 0;
+}
+
+.loc-diagram {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 10px;
+}
+
+.loc-candidates {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+
+.loc-candidate {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: var(--card);
+}
+
+.loc-candidate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.loc-candidate-head h4 {
+  margin: 0;
+  font-size: 1.08rem;
+  color: var(--deep);
+}
+
+.loc-confidence {
+  font-family: var(--display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--green);
+  color: var(--deep);
+  background: var(--mint);
+}
+
+.loc-confidence.is-high {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.loc-confidence.is-low {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.loc-candidate-row {
+  margin: 8px 0 0;
+}
+
+.loc-row-label {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--deep);
+}
+
+.loc-observations {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.loc-possibilities {
+  margin: 8px 0;
+}
+
+.loc-first-tag {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.loc-possibility-note {
+  display: block;
+  margin-top: 2px;
+}
+
+.loc-cannot-list {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.loc-closing {
+  margin-top: 12px;
+}
+
+.loc-closing p {
+  margin: 0;
+}

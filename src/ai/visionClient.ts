@@ -32,7 +32,8 @@ export type VisionTask =
   | 'hand-video'
   | 'fast-face'
   | 'fast-arm'
-  | 'document-photo';
+  | 'document-photo'
+  | 'face-localizer';
 
 export type VisionAnalysis = {
   headline: string;
@@ -143,13 +144,12 @@ function parseResponse(data: unknown): VisionAnalysis {
 }
 
 /**
- * Send prepared frames (data URLs from the extraction helpers in
- * src/ml/analyze.ts) to the Worker for AI analysis of one upload
- * exercise. Ensures the Worker session exists, attaches a consent
- * token covering the vision scope, and throws an Error with a safe,
- * user-facing message on any failure.
+ * Shared transport for every image-mode call: ensures the Worker
+ * session exists, attaches a consent token covering the vision scope,
+ * posts the request, and returns the decoded response body. Throws an
+ * Error with a safe, user-facing message on any failure.
  */
-export async function analyzeWithAi(input: VisionAnalyzeInput): Promise<VisionAnalysis> {
+async function requestVision(input: VisionAnalyzeInput): Promise<unknown> {
   const api = getApiBase();
   if (!api) {
     throw new Error('Live AI is not configured for this build.');
@@ -195,6 +195,218 @@ export async function analyzeWithAi(input: VisionAnalyzeInput): Promise<VisionAn
         : 'Live AI could not respond. Emergency actions remain available.',
     );
   }
-  const data: unknown = await response.json().catch(() => null);
-  return parseResponse(data);
+  return response.json().catch(() => null);
+}
+
+/**
+ * Send prepared frames (data URLs from the extraction helpers in
+ * src/ml/analyze.ts) to the Worker for AI analysis of one upload
+ * exercise. Ensures the Worker session exists, attaches a consent
+ * token covering the vision scope, and throws an Error with a safe,
+ * user-facing message on any failure.
+ */
+export async function analyzeWithAi(input: VisionAnalyzeInput): Promise<VisionAnalysis> {
+  return parseResponse(await requestVision(input));
+}
+
+// ---------------------------------------------------------------------------
+// Face Lesion Localizer: the extended reply shape.
+//
+// The 'face-localizer' task returns the base shape plus three fields
+// the descriptive tasks never carry: a short pattern code, up to four
+// candidate lesion levels (site, tract, vessel, qualitative
+// confidence, rationale), and up to five ranked possibilities. The
+// Worker normalizes and caps these on its side; the client validates
+// again before anything is shown, dropping or downgrading anything
+// that does not fit the contract instead of trusting it.
+// ---------------------------------------------------------------------------
+
+/** Qualitative fit of one candidate level. Never a number or a score. */
+export type LocalizerConfidence = 'high' | 'moderate' | 'low';
+
+export interface LocalizerCandidate {
+  site: string;
+  tract: string;
+  vessel: string;
+  confidence: LocalizerConfidence;
+  rationale: string;
+}
+
+export interface LocalizerPossibility {
+  name: string;
+  note: string;
+}
+
+export interface LocalizerAnalysis {
+  headline: string;
+  observations: string[];
+  cannotAnalyze: boolean;
+  reason: string | null;
+  /** Short pattern code from the Worker, for example 'central-umn'. */
+  pattern: string | null;
+  lesionCandidates: LocalizerCandidate[];
+  possibilities: LocalizerPossibility[];
+  emergency: boolean;
+}
+
+interface ParsedLocalizerShape {
+  headline: string;
+  observations: string[];
+  cannotAnalyze: boolean;
+  reason: string | null;
+  pattern: string | null;
+  lesionCandidates: LocalizerCandidate[];
+  possibilities: LocalizerPossibility[];
+}
+
+const LOCALIZER_CONFIDENCES: readonly LocalizerConfidence[] = ['high', 'moderate', 'low'];
+const MAX_LOCALIZER_CANDIDATES = 4;
+const MAX_LOCALIZER_POSSIBILITIES = 5;
+const MAX_LOCALIZER_FIELD_CHARS = 400;
+
+function localizerText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, MAX_LOCALIZER_FIELD_CHARS) : null;
+}
+
+function parseLocalizerCandidate(value: unknown): LocalizerCandidate | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const site = localizerText(record.site);
+  const tract = localizerText(record.tract);
+  const vessel = localizerText(record.vessel);
+  const rationale = localizerText(record.rationale);
+  if (!site || !tract || !vessel || !rationale) return null;
+  // An unknown confidence word is downgraded to 'low', never upgraded:
+  // the same conservative rule the Worker normalizer applies.
+  const confidence = LOCALIZER_CONFIDENCES.includes(record.confidence as LocalizerConfidence)
+    ? (record.confidence as LocalizerConfidence)
+    : 'low';
+  return { site, tract, vessel, confidence, rationale };
+}
+
+function parseLocalizerPossibility(value: unknown): LocalizerPossibility | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const name = localizerText(record.name);
+  const note = localizerText(record.note);
+  if (!name || !note) return null;
+  return { name, note };
+}
+
+/**
+ * Parse the localizer JSON reply. The base shape is validated exactly
+ * like parseVisionReply; the extended fields are validated entry by
+ * entry, so one malformed candidate cannot sink the whole reply, and
+ * a cannot-analyze reply never carries candidates or possibilities,
+ * whatever the model wrote.
+ */
+export function parseLocalizerReply(reply: string): ParsedLocalizerShape {
+  const candidates = [
+    reply,
+    reply.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      if (!parsed || typeof parsed !== 'object') continue;
+      const record = parsed as {
+        headline?: unknown;
+        observations?: unknown;
+        cannotAnalyze?: unknown;
+        reason?: unknown;
+        pattern?: unknown;
+        lesionCandidates?: unknown;
+        possibilities?: unknown;
+      };
+      if (
+        typeof record.headline === 'string' &&
+        record.headline.trim() &&
+        Array.isArray(record.observations) &&
+        record.observations.every((item) => typeof item === 'string') &&
+        typeof record.cannotAnalyze === 'boolean'
+      ) {
+        const cannotAnalyze = record.cannotAnalyze;
+        return {
+          headline: record.headline,
+          observations: record.observations as string[],
+          cannotAnalyze,
+          reason: typeof record.reason === 'string' ? record.reason : null,
+          pattern: localizerText(record.pattern),
+          lesionCandidates: cannotAnalyze
+            ? []
+            : (Array.isArray(record.lesionCandidates) ? record.lesionCandidates : [])
+                .map(parseLocalizerCandidate)
+                .filter((entry): entry is LocalizerCandidate => entry !== null)
+                .slice(0, MAX_LOCALIZER_CANDIDATES),
+          possibilities: cannotAnalyze
+            ? []
+            : (Array.isArray(record.possibilities) ? record.possibilities : [])
+                .map(parseLocalizerPossibility)
+                .filter((entry): entry is LocalizerPossibility => entry !== null)
+                .slice(0, MAX_LOCALIZER_POSSIBILITIES),
+        };
+      }
+    } catch {
+      // Not JSON: fall through to the wrapper below.
+    }
+  }
+  return {
+    headline: 'AI analysis',
+    observations: [reply],
+    cannotAnalyze: false,
+    reason: null,
+    pattern: null,
+    lesionCandidates: [],
+    possibilities: [],
+  };
+}
+
+function parseLocalizerResponse(data: unknown): LocalizerAnalysis {
+  if (!data || typeof data !== 'object') {
+    throw new Error('The AI service returned an invalid response. Please try again.');
+  }
+  const record = data as { reply?: unknown; mode?: unknown };
+  if (
+    typeof record.reply !== 'string' ||
+    !record.reply.trim() ||
+    record.reply.length > MAX_REPLY_CHARS
+  ) {
+    throw new Error('The AI service returned an invalid response. Please try again.');
+  }
+  if (record.mode === 'emergency') {
+    return {
+      headline: 'Possible emergency signs',
+      observations: [record.reply],
+      cannotAnalyze: false,
+      reason: null,
+      pattern: null,
+      lesionCandidates: [],
+      possibilities: [],
+      emergency: true,
+    };
+  }
+  if (record.mode !== 'live-ai') {
+    throw new Error('The AI service returned an invalid response. Please try again.');
+  }
+  return { ...parseLocalizerReply(record.reply), emergency: false };
+}
+
+export interface LocalizerAnalyzeInput {
+  /** One JPEG or PNG data URL: the single photo this feature reads. */
+  images: string[];
+  /** Optional short note; the Worker treats it as untrusted text. */
+  note?: string;
+}
+
+/**
+ * Analyze one uploaded face photo with the localizer task. Same
+ * consent discipline as analyzeWithAi: callers invoke this only after
+ * the person has explicitly agreed in this session.
+ */
+export async function analyzeLocalizer(input: LocalizerAnalyzeInput): Promise<LocalizerAnalysis> {
+  return parseLocalizerResponse(
+    await requestVision({ task: 'face-localizer', images: input.images, note: input.note }),
+  );
 }

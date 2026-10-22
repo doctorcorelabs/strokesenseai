@@ -641,6 +641,30 @@ export const R1_FEATURES: FeatureEntry[] = [
     evalReport: 'Not evaluated yet',
   },
   {
+    id: 'lesion-localizer',
+    name: 'Face Lesion Localizer',
+    displayName: 'Face Lesion Localizer',
+    tagline: 'From one face photo to the likely pathway, level, and vessel',
+    group: 'Vision AI',
+    maturity: 'lab',
+    phase: 1,
+    benefit: 'Explore where a one-sided face droop could come from.',
+    inputs: ['camera'],
+    minutes: 2,
+    zone: 'check',
+    summary:
+      'Upload one photo of a face. An AI vision model reads the pattern of the droop: which parts of the face look weaker, and whether the forehead is involved. From that pattern the result explores, in ranked order, the levels of the corticobulbar pathway (the command pathway from the brain to the face muscles) where a lesion could sit, the candidate blood vessels, and the conditions that could explain the picture. Every result is a possibility exploration for learning and clinical discussion, written in the language of possibility, never a diagnosis.',
+    limitations:
+      'One photo supports pattern-level conclusions only (central versus peripheral), never fine structural distinctions, and confidence is capped at moderate. A still photo cannot show movement speed, tiredness over repetitions, linked involuntary movements, spontaneous blinking, or the difference between a smile on command and a spontaneous smile, and the forehead is hard to judge from a single still image. Tilted heads, one-sided lighting, low resolution, and beauty filters can all fake or hide asymmetry; a photo that cannot be read returns cannot analyze instead of a guess. A guided video session on the same person would raise the confidence ceiling.',
+    inputKinds: ['camera'],
+    route: '#lab/lesion-localizer',
+    models:
+      'The photo you choose is sent to the Worker AI endpoint (an OpenRouter vision model configured by the site) when you press Analyze. The model reads the visible facial pattern and returns ranked candidate lesion levels with the pathway involved, candidate vessels, and possibilities to consider, each with a qualitative confidence. The analysis runs on that server-side vision model, not on this device; nothing is measured on this device, and no score or diagnosis is produced.',
+    retention:
+      'Nothing is stored by this site. Your photo is sent to the AI service only when you press Analyze, and it is not kept after the analysis.',
+    evalReport: 'Not evaluated yet',
+  },
+  {
     id: 'movement-lab',
     name: 'Movement Lab',
     displayName: 'Movement Lab',

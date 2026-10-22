@@ -6,6 +6,15 @@ All notable changes to StrokeSense AI Lab are recorded in this file. Versions fo
 
 Fixes and hardening from the 15-analyst audit of the Phase 0 build (2026-10-20). No feature behavior changes for end users beyond correctness and safety of what already shipped.
 
+### Face Lesion Localizer (2026-10-22)
+
+#### Added
+
+- New lab: Face Lesion Localizer (route #lab/lesion-localizer). The visitor uploads one photo of a face, and nothing is sent anywhere until they accept the vision consent and press "Analyze photo". The photo is analyzed by the Worker AI endpoint (new dedicated `face-localizer` task on POST /api/vision) rather than on the device, following the product direction set by the AI upload analysis package below: one photo in, one result sheet out, in experimental mode.
+- The result sheet leads with the visible pattern (which parts of the face look weaker, and whether the forehead is involved), then explores, in ranked order, the candidate lesion levels along the corticobulbar pathway (the command pathway from the brain to the face muscles), each with the tract involved, the candidate blood vessels, and a qualitative confidence. Confidence is capped at moderate on both the Worker and the client, because a single still photo has no time dimension: movement speed, fatigability, synkinesis, and the difference between a commanded and a spontaneous smile cannot be judged from it. A pathway diagram marks the candidate levels on the facial movement pathway, and condition names appear only inside a possibilities list, each with the signs that support it and the signs that do not fit.
+- The framing is possibility exploration end to end, never a diagnosis: the sheet opens by saying so, the model prompt forbids scores, percentages, and words of certainty, and every result closes with the note that only an in-person examination and brain imaging (CT or MRI) can confirm where a lesion is. The Worker runs the localizer through its own prompt and a strict normalizer (a model confidence of "high" is downgraded to "moderate", a cannotAnalyze answer empties the pattern and both lists and renders the standard cannot-analyze sheet, and the emergency guard still answers acute-symptom notes before any model call). The catalog labels the feature 'mixed' and its registry copy states plainly that the photo leaves the device only on the Analyze press and that no score or diagnosis is produced.
+- Coverage: worker V-LOC tests lock the normalizer and the guard order, frontend result-model tests cover the sheet, and an e2e case in e2e/upload-ai.spec.ts proves no vision request leaves before consent and the Analyze press and that the possibility sheet renders from the stubbed reply.
+
 ### AI upload analysis (2026-10-22)
 
 Product decision (2026-10-22): uploads are analyzed by the site AI service instead of depending only on a live camera, which did not work well on every device. The live on-device measurement paths are unchanged and remain the default wherever they already existed as measurement; the upload path is a separate, clearly labelled source whose results are AI descriptions, not measurements.

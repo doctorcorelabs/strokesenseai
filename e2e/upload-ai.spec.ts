@@ -40,6 +40,11 @@ const FACE_HEADLINE = 'The AI describes a face that starts relaxed and then smil
 const FACE_OBSERVATION = 'In the later frames, both mouth corners rise.';
 const DOCUMENT_HEADLINE = 'The photo shows a discharge summary page.';
 const DOCUMENT_OBSERVATION = 'A follow-up appointment date is listed on the page.';
+const LOCALIZER_HEADLINE =
+  'The right lower face looks weaker, and the forehead still wrinkles on both sides.';
+const LOCALIZER_SITE = 'Genu of the internal capsule, left side';
+const LOCALIZER_VESSEL = 'Lateral lenticulostriate arteries';
+const LOCALIZER_POSSIBILITY = 'Ischemic stroke in MCA territory';
 
 async function gotoHash(page: Page, hash: string) {
   await page.goto(`/${hash}`);
@@ -101,6 +106,64 @@ async function stubWorker(page: Page, headline: string, observation: string) {
           observations: [observation],
           cannotAnalyze: false,
           reason: null,
+        }),
+        sources: [],
+        mode: 'live-ai',
+      }),
+    });
+  });
+  return counters;
+}
+
+/**
+ * Same interception as stubWorker, but the vision reply carries the
+ * extended localizer shape: a pattern code, one candidate lesion
+ * level, and one ranked possibility, exactly as the client parser
+ * validates them.
+ */
+async function stubLocalizerWorker(page: Page) {
+  const counters: ApiCounters = { vision: 0 };
+  await page.route('**/api/session', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sessionId: 'e2e-upload-session' }),
+    });
+  });
+  await page.route('**/api/consent', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ token: 'e2e-consent-token', expiresIn: 7200 }),
+    });
+  });
+  await page.route('**/api/vision', async (route) => {
+    counters.vision += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        reply: JSON.stringify({
+          headline: LOCALIZER_HEADLINE,
+          observations: ['The right mouth corner sits lower in the photo.'],
+          cannotAnalyze: false,
+          reason: null,
+          pattern: 'central-umn',
+          lesionCandidates: [
+            {
+              site: LOCALIZER_SITE,
+              tract: 'Corticobulbar tract',
+              vessel: LOCALIZER_VESSEL,
+              confidence: 'moderate',
+              rationale: 'The forehead still wrinkles on both sides.',
+            },
+          ],
+          possibilities: [
+            {
+              name: LOCALIZER_POSSIBILITY,
+              note: 'Fits the forehead-sparing pattern in this photo.',
+            },
+          ],
         }),
         sources: [],
         mode: 'live-ai',
@@ -206,6 +269,60 @@ test.describe('AI upload path', () => {
     // The photo framing line warns the reading can misread doses and
     // names, so the paper original still wins.
     await expect(sheet.getByText(/can misread handwriting, doses, and names/)).toBeVisible();
+    await expect(counters.vision).toBe(1);
+    expect(fatal).toEqual([]);
+  });
+
+  test('lesion localizer sends nothing before Analyze photo and renders the possibility sheet', async ({
+    page,
+  }) => {
+    const fatal = watchFatalErrors(page);
+    const counters = await stubLocalizerWorker(page);
+
+    await gotoHash(page, '#lab/lesion-localizer');
+    await expect(
+      page.getByRole('heading', { level: 1, name: /Face Lesion Localizer/i }),
+    ).toBeVisible();
+
+    // The example step teaches the result shape first, with the same
+    // pattern hero and pathway diagram a real result will use.
+    await expect(page.getByText('Central pattern (upper motor neuron)')).toBeVisible();
+    await expect(page.getByText('Lateral lenticulostriate arteries').first()).toBeVisible();
+
+    await page.getByRole('button', { name: /start trying/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Upload one photo of a face' }),
+    ).toBeVisible();
+    await expect(page.getByText('Upload a photo of a face')).toBeVisible();
+
+    await page.locator('.upload-panel input[type="file"]').setInputFiles({
+      name: 'face.png',
+      mimeType: 'image/png',
+      buffer: PNG_BUFFER,
+    });
+
+    // The photo is prepared and shown for approval; preparing and
+    // even ticking consent send nothing. Only the button sends.
+    await expect(page.getByText('This photo will be sent to the AI')).toBeVisible();
+    await expect(counters.vision).toBe(0);
+
+    await page.locator('.consent-box input[type="checkbox"]').check();
+    await expect(counters.vision).toBe(0);
+
+    await page.getByRole('button', { name: 'Analyze photo' }).click();
+
+    const sheet = page.locator('.result-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText('Live AI', { exact: true })).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: LOCALIZER_HEADLINE })).toBeVisible();
+    await expect(sheet.getByText('Central pattern (upper motor neuron)')).toBeVisible();
+    await expect(sheet.getByText(LOCALIZER_SITE)).toBeVisible();
+    await expect(sheet.getByText(LOCALIZER_VESSEL)).toBeVisible();
+    await expect(sheet.getByText(LOCALIZER_POSSIBILITY)).toBeVisible();
+    // The mandatory framing travels with the sheet: possibilities,
+    // never a diagnosis.
+    await expect(sheet.getByText(/possibility exploration/i)).toBeVisible();
+    await expect(sheet.getByText(/not a diagnosis/i).first()).toBeVisible();
     await expect(counters.vision).toBe(1);
     expect(fatal).toEqual([]);
   });

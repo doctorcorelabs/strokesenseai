@@ -11,7 +11,7 @@ vi.mock('./client', () => ({
   requestConsentToken: async () => 'consent-token-1',
 }));
 
-import { analyzeWithAi, parseVisionReply } from './visionClient';
+import { analyzeLocalizer, analyzeWithAi, parseLocalizerReply, parseVisionReply } from './visionClient';
 import * as clientModule from './client';
 
 const consentSpy = vi.spyOn(clientModule, 'requestConsentToken');
@@ -140,5 +140,130 @@ describe('parseVisionReply', () => {
     const parsed = parseVisionReply('{"headline": 42}');
     expect(parsed.headline).toBe('AI analysis');
     expect(parsed.observations).toEqual(['{"headline": 42}']);
+  });
+});
+
+const LOCALIZER_REPLY = {
+  headline: 'The pattern points to the corticobulbar pathway on the left.',
+  observations: ['The right mouth corner sits lower at rest.'],
+  cannotAnalyze: false,
+  reason: null,
+  pattern: 'central-umn',
+  lesionCandidates: [
+    {
+      site: 'Genu of the internal capsule, left side',
+      tract: 'Corticobulbar tract',
+      vessel: 'Lateral lenticulostriate arteries',
+      confidence: 'moderate',
+      rationale: 'The forehead still wrinkles on both sides.',
+    },
+  ],
+  possibilities: [
+    { name: 'Small subcortical infarct', note: 'Fits a central pattern with no cortical signs.' },
+  ],
+};
+
+describe('analyzeLocalizer', () => {
+  it('posts the face-localizer task and parses the extended reply shape', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        reply: JSON.stringify(LOCALIZER_REPLY),
+        sources: [],
+        mode: 'live-ai',
+      }),
+    );
+
+    const result = await analyzeLocalizer({
+      images: ['data:image/jpeg;base64,AAAA'],
+      note: 'started yesterday',
+    });
+
+    expect(consentSpy).toHaveBeenCalledWith(['vision']);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.test/api/vision');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.mode).toBe('image');
+    expect(body.task).toBe('face-localizer');
+    expect(body.note).toBe('started yesterday');
+    expect(result.emergency).toBe(false);
+    expect(result.pattern).toBe('central-umn');
+    expect(result.lesionCandidates).toEqual(LOCALIZER_REPLY.lesionCandidates);
+    expect(result.possibilities).toEqual(LOCALIZER_REPLY.possibilities);
+  });
+
+  it('returns the emergency reply with empty candidates when the guard fires', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        reply: 'Call 119 immediately in Indonesia. Do not wait.',
+        sources: [],
+        mode: 'emergency',
+      }),
+    );
+
+    const result = await analyzeLocalizer({ images: ['data:image/jpeg;base64,AAAA'] });
+
+    expect(result.emergency).toBe(true);
+    expect(result.lesionCandidates).toEqual([]);
+    expect(result.possibilities).toEqual([]);
+  });
+});
+
+describe('parseLocalizerReply', () => {
+  it('parses a complete localizer reply', () => {
+    const parsed = parseLocalizerReply(JSON.stringify(LOCALIZER_REPLY));
+    expect(parsed.pattern).toBe('central-umn');
+    expect(parsed.lesionCandidates).toHaveLength(1);
+    expect(parsed.possibilities).toHaveLength(1);
+  });
+
+  it('empties candidates and possibilities when the reply says cannot analyze', () => {
+    const parsed = parseLocalizerReply(
+      JSON.stringify({ ...LOCALIZER_REPLY, cannotAnalyze: true, reason: 'Too blurry.' }),
+    );
+    expect(parsed.cannotAnalyze).toBe(true);
+    expect(parsed.reason).toBe('Too blurry.');
+    expect(parsed.lesionCandidates).toEqual([]);
+    expect(parsed.possibilities).toEqual([]);
+  });
+
+  it('drops malformed candidates and downgrades an unknown confidence to low', () => {
+    const parsed = parseLocalizerReply(
+      JSON.stringify({
+        ...LOCALIZER_REPLY,
+        lesionCandidates: [
+          LOCALIZER_REPLY.lesionCandidates[0],
+          { site: 'Pons', tract: 42, vessel: 'Basilar perforators', confidence: 'high', rationale: 'Bad entry.' },
+          {
+            site: 'Peripheral facial nerve, right side',
+            tract: 'Facial nerve (CN VII)',
+            vessel: 'Not a stroke territory',
+            confidence: 'certain',
+            rationale: 'The whole right side looks weak.',
+          },
+        ],
+      }),
+    );
+    expect(parsed.lesionCandidates).toHaveLength(2);
+    expect(parsed.lesionCandidates[1].confidence).toBe('low');
+  });
+
+  it('caps the number of candidates and possibilities', () => {
+    const parsed = parseLocalizerReply(
+      JSON.stringify({
+        ...LOCALIZER_REPLY,
+        lesionCandidates: Array.from({ length: 6 }, () => LOCALIZER_REPLY.lesionCandidates[0]),
+        possibilities: Array.from({ length: 7 }, () => LOCALIZER_REPLY.possibilities[0]),
+      }),
+    );
+    expect(parsed.lesionCandidates).toHaveLength(4);
+    expect(parsed.possibilities).toHaveLength(5);
+  });
+
+  it('wraps a non-JSON reply with empty extended fields', () => {
+    const parsed = parseLocalizerReply('A plain description without the JSON shape.');
+    expect(parsed.headline).toBe('AI analysis');
+    expect(parsed.pattern).toBeNull();
+    expect(parsed.lesionCandidates).toEqual([]);
+    expect(parsed.possibilities).toEqual([]);
   });
 });

@@ -20,6 +20,7 @@ import type { FeatureModeKind } from './ai/featureMode';
 const R1_IDS = [
   'fast-live-check',
   'face-lab',
+  'lesion-localizer',
   'movement-lab',
   'speech-lab',
   'document-studio',
@@ -51,7 +52,7 @@ function expectCompleteV2Fields(feature: FeatureEntry) {
 }
 
 describe('registry v2: R1 features', () => {
-  it('registers exactly the six R1 features, with ids unique across the catalog', () => {
+  it('registers exactly the seven R1 features, with ids unique across the catalog', () => {
     expect(R1_FEATURES.map((feature) => feature.id).sort()).toEqual([...R1_IDS].sort());
     const legacyIds = new Set(FEATURES.map((feature) => feature.id));
     for (const feature of R1_FEATURES) {
@@ -189,6 +190,9 @@ describe('registry v2: honest mode kinds for R1 features', () => {
   const EXPECTED_R1_KINDS: Record<string, FeatureModeKind> = {
     'fast-live-check': 'mixed',
     'face-lab': 'mixed',
+    // Upload-only: the whole analysis is the Worker vision model, so
+    // the honest kind is 'ai', pinned like the others.
+    'lesion-localizer': 'ai',
     'movement-lab': 'mixed',
     'speech-lab': 'on-device',
     'document-studio': 'mixed',

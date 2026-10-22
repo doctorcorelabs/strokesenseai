@@ -67,6 +67,10 @@ const KIND_OVERRIDES: Partial<Record<string, FeatureModeKind>> = {
   'document-studio': 'mixed',
   // The Worker AI endpoint does this feature's main job.
   'ask-the-lab': 'ai',
+  // Upload-only feature: the whole analysis is the server-side vision
+  // model reading one photo the person chose. There is no local core
+  // to mix in, so the honest kind is 'ai'.
+  'lesion-localizer': 'ai',
 };
 
 export function featureModeKind(feature: FeatureEntry): FeatureModeKind {
